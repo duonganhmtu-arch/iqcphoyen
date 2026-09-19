@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống Quản lý IQC LIS - Bệnh viện Phổ Yên (Cloud Version)</title>
+    <style>
+        /* ================= CƠ SỞ MÀU SẮC & MATERIAL DESIGN ================= */
+        :root {
+            --primary: #1a73e8; --primary-dark: #1557b0; --primary-light: #e8f0fe;
+            --success: #34a853; --warning: #fbbc04; --danger: #ea4335;
+            --bg-color: #f1f3f4; --surface: #ffffff;
+            --text-main: #202124; --text-muted: #5f6368; --border: #dadce0;
+            --shadow-1: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+            --radius: 8px; --font: 'Inter', system-ui, -apple-system, sans-serif;
+            --sidebar-width: 250px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: var(--font); background-color: var(--bg-color); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+        
+        .text-primary { color: var(--primary); } .text-success { color: var(--success); }
+        .text-warning { color: var(--warning); } .text-danger { color: var(--danger); }
+        .bg-primary { background-color: var(--primary); color: white; }
+        .bg-danger { background-color: var(--danger); color: white; }
+        .bg-success { background-color: var(--success); color: white; }
+        .bg-warning { background-color: var(--warning); color: #202124; }
+        
+        .flex { display: flex; } .items-center { align-items: center; } .justify-between { justify-content: space-between; }
+        .gap-1 { gap: 0.5rem; } .gap-2 { gap: 1rem; }
+        
+        /* ================= BỐ CỤC CHÍNH ================= */
+        #sidebar { width: var(--sidebar-width); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 100; }
+        .logo-area { padding: 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); background: var(--primary); color: white; }
+        .logo-area .hospital-name { font-size: 14px; font-weight: 600; text-transform: uppercase; }
+        .logo-area .app-name { font-size: 11px; opacity: 0.9; }
+        
+        .menu { flex: 1; padding: 16px 0; overflow-y: auto; }
+        .menu-item { padding: 12px 24px; display: flex; align-items: center; gap: 12px; color: var(--text-main); text-decoration: none; font-weight: 500; font-size: 14px; cursor: pointer; border-left: 4px solid transparent; }
+        .menu-item:hover, .menu-item.active { background: var(--primary-light); color: var(--primary); border-left-color: var(--primary); }
+        
+        .user-profile { padding: 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 12px; background: var(--surface); }
+        .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: white; display: flex; justify-content: center; align-items: center; font-weight: bold; }
+        
+        #main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        header { height: 64px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); z-index: 90; }
+        .content-area { flex: 1; padding: 24px; overflow-y: auto; }
+        
+        /* ================= COMPONENT ================= */
+        .card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-1); padding: 20px; margin-bottom: 24px; }
+        .card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--primary-dark); border-bottom: 2px solid var(--primary-light); padding-bottom: 8px; }
+        
+        .btn { padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; font-weight: 500; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
+        .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-1); }
+        .btn-success { background: var(--success); color: white; box-shadow: var(--shadow-1); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-outline:hover { background: var(--bg-color); }
+        
+        /* ================= BẢNG DỮ LIỆU ================= */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: center; }
+        th { background: var(--bg-color); color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 12px; position: sticky; top: 0; }
+        tbody tr:hover { background: var(--primary-light); }
+        input[type="number"], input[type="text"] { width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px; outline: none; text-align: center; font-family: var(--font); }
+        input:focus { border-color: var(--primary); }
+        
+        .table-wrap { max-height: 400px; overflow-y: auto; }
+
+        /* ================= BIỂU ĐỒ SVG ================= */
+        .chart-container { width: 100%; height: 350px; background: white; border: 1px solid var(--border); border-radius: var(--radius); position: relative; margin-top: 20px; overflow: hidden; }
+        svg.lj-chart { width: 100%; height: 100%; }
+        .line-mean { stroke: var(--success); stroke-width: 2; }
+        .line-sd1 { stroke: var(--warning); stroke-width: 1; stroke-dasharray: 4; }
+        .line-sd2 { stroke: var(--warning); stroke-width: 1.5; stroke-dasharray: 4; }
+        .line-sd3 { stroke: var(--danger); stroke-width: 2; stroke-dasharray: 2; }
+        .chart-grid { stroke: var(--border); stroke-width: 0.5; }
+        .data-point { fill: var(--primary); cursor: pointer; transition: r 0.2s; }
+        .data-point:hover { r: 6; }
+        .data-point.violation { fill: var(--danger); }
+        .data-line { stroke: var(--primary); stroke-width: 2; fill: none; }
+        .axis-text { font-size: 11px; fill: var(--text-muted); font-family: var(--font); }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--surface); padding: 16px; border-radius: var(--radius); box-shadow: var(--shadow-1); border-left: 4px solid var(--primary); }
+        .stat-title { font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-bottom: 8px;}
+        .stat-value { font-size: 20px; font-weight: bold; color: var(--text-main); }
+        .badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; display: inline-block;}
+        
+        #tooltip { position: absolute; background: rgba(0,0,0,0.8); color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; pointer-events: none; display: none; z-index: 1000; }
+        
+        /* Modal Import */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 999; }
+        .modal { background: white; padding: 24px; border-radius: var(--radius); width: 800px; max-width: 95%; }
+        .modal textarea { width: 100%; height: 250px; padding: 12px; border: 1px solid var(--border); margin-bottom: 16px; resize: none; font-family: monospace; font-size: 12px; white-space: pre;}
+        .hidden { display: none !important; }
+
+        /* ================= IN ẤN (PRINT) CẬP NHẬT CHỐNG CẮT TRANG ================= */
+        .print-only { display: none; }
+        @media print {
+            body { height: auto !important; overflow: visible !important; background: white; font-size: 12pt; display: block !important; }
+            #main-content { overflow: visible !important; width: 100% !important; display: block !important; height: auto !important; }
+            #sidebar, header, .btn, .menu, select, .no-print { display: none !important; }
+            .content-area { padding: 0 !important; overflow: visible !important; height: auto !important; }
+            .card { box-shadow: none; border: 1px solid #000; margin-bottom: 20px; page-break-inside: avoid; }
+            .table-wrap { max-height: none !important; overflow: visible !important; height: auto !important; }
+            .chart-container { border: 1px solid #000; height: 350px; page-break-inside: avoid; }
+            table { border: 1px solid #000; page-break-inside: auto; } 
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            th, td { border: 1px solid #000; padding: 6px; }
+            .badge { color: #000 !important; background: none !important; border: 1px solid #000; padding: 2px 4px; border-radius: 4px; }
+            input { border: none; font-weight: bold; background: transparent; padding: 0;}
+            #print-header { display: flex !important; justify-content: space-between; margin-bottom: 20px; }
+            #print-footer { display: flex !important; justify-content: space-around; margin-top: 40px; page-break-inside: avoid; }
+            .print-only { display: block !important; }
+        }
+        #print-header, #print-footer { display: none; }
+        
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-muted); }
+        .form-group input[type="text"] { text-align: left; padding: 8px 12px; }
+        .rule-checkbox { margin-bottom: 10px; display: flex; align-items: center; gap: 8px; font-size: 14px; }
+        
+        /* Time Selector */
+        .time-selector { display: flex; gap: 8px; align-items: center; }
+        .time-selector select { padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: var(--font); font-size: 14px; outline: none; background: white; cursor: pointer; }
+        .time-selector select:focus { border-color: var(--primary); }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <nav id="sidebar">
+        <div class="logo-area">
+            <div style="font-size: 28px;">🏥</div>
+            <div>
+                <div class="hospital-name" id="ui-hospital-name">Bệnh viện Phổ Yên</div>
+                <div class="app-name">HỆ THỐNG IQC LIS</div>
+                <div style="font-size:10px; color:var(--success); font-weight:bold; margin-top:2px;">☁️ Đã kết nối Cloud</div>
+            </div>
+        </div>
+        <div class="menu">
+            <a class="menu-item active" onclick="switchView('dashboard', this)">📊 Dashboard</a>
+            <a class="menu-item" onclick="switchView('qc-entry', this, 'biochem')">🧪 Sinh hóa</a>
+            <a class="menu-item" onclick="switchView('qc-entry', this, 'hematology')">🩸 Huyết học</a>
+            <a class="menu-item" onclick="switchView('config', this)">⚙️ Cấu hình Xét nghiệm</a>
+            <a class="menu-item" onclick="switchView('settings', this)">🛠️ Cài đặt Hệ thống</a>
+            <a class="menu-item" onclick="exportDataJSON()">📁 Tải bản sao lưu Cloud</a>
+        </div>
+        <div class="user-profile">
+            <div class="avatar">S</div>
+            <div>
+                <div style="font-size: 14px; font-weight: 600;" id="ui-user-name">Hà Thị Son</div>
+                <div style="font-size: 12px; color: var(--text-muted);" id="ui-dept-name">Khoa Xét nghiệm</div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main id="main-content">
+        <header>
+            <h2 id="page-main-title" style="font-size: 18px; color: var(--primary-dark);">Tổng quan Hệ thống Nội kiểm</h2>
+            <div class="time-selector no-print">
+                <span style="font-size: 14px; font-weight: 500; margin-right: 8px;">Thời gian:</span>
+                <select id="sel-month" onchange="changeTime()">
+                    <option value="01">Tháng 01</option><option value="02">Tháng 02</option><option value="03">Tháng 03</option>
+                    <option value="04">Tháng 04</option><option value="05">Tháng 05</option><option value="06">Tháng 06</option>
+                    <option value="07">Tháng 07</option><option value="08" selected>Tháng 08</option><option value="09">Tháng 09</option>
+                    <option value="10">Tháng 10</option><option value="11">Tháng 11</option><option value="12">Tháng 12</option>
+                </select>
+                <select id="sel-year" onchange="changeTime()">
+                    <option value="2024">2024</option><option value="2025">2025</option><option value="2026" selected>2026</option>
+                    <option value="2027">2027</option>
+                </select>
+            </div>
+        </header>
+
+        <div class="content-area">
+            
+            <!-- HEADER IN ẤN -->
+            <div id="print-header">
+                <div style="text-align: center; line-height: 1.5;">
+                    <strong style="font-size: 16px; text-transform: uppercase;" id="print-hospital">BỆNH VIỆN PHỔ YÊN</strong><br>
+                    <span style="font-size: 14px; text-transform: uppercase; font-weight: bold;" id="print-dept">KHOA XÉT NGHIỆM</span>
+                </div>
+                <div style="text-align: center; line-height: 1.5;">
+                    <strong style="font-size: 16px;">BIỂU ĐỒ NỘI KIỂM CHẤT LƯỢNG (LEVEY-JENNINGS)</strong><br>
+                    <span style="font-size: 14px;" id="print-month-year">Tháng: 08/2026</span>
+                </div>
+            </div>
+
+            <!-- DASHBOARD -->
+            <div id="view-dashboard" class="view-section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-title">Xét Nghiệm Sinh Hóa</div>
+                        <div class="stat-value" id="dash-bio-count">0 Test</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-title">Xét Nghiệm Huyết Học</div>
+                        <div class="stat-value" id="dash-hem-count">0 Test</div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: var(--danger);">
+                        <div class="stat-title">Cảnh báo / Lỗi Westgard</div>
+                        <div class="stat-value" id="dash-violations">0</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3 class="card-title" id="dash-log-title">Nhật ký cảnh báo</h3>
+                    <table>
+                        <thead><tr><th>Ngày</th><th>Phân loại</th><th>Xét nghiệm</th><th>Mức QC</th><th>Lỗi Westgard</th></tr></thead>
+                        <tbody id="violation-log-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- QC ENTRY -->
+            <div id="view-qc-entry" class="view-section hidden">
+                <div class="flex justify-between items-center no-print" style="margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                    <div class="flex gap-2">
+                        <select id="test-selector" class="btn btn-outline" style="background: white;" onchange="loadTestData()"></select>
+                        <select id="level-selector" class="btn btn-outline" style="background: white;" onchange="loadTestData()">
+                            <option value="level1">Control N (Bình thường)</option>
+                            <option value="level2">Control P (Bất thường)</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-1" style="flex-wrap: wrap;">
+                        <button class="btn btn-outline" onclick="exportDataExcel()">📊 Xuất Excel</button>
+                        <button class="btn btn-success" onclick="openImportModal()">📥 Nhập từ Excel</button>
+                        <button class="btn btn-primary" onclick="saveData(true)">☁️ Lưu lên Cloud</button>
+                        <button class="btn btn-outline" onclick="window.print()">🖨️ In / Xuất PDF</button>
+                    </div>
+                </div>
+
+                <div style="font-weight: bold; font-size: 18px; margin-bottom: 16px; text-align: center;" id="print-test-title" class="print-only">
+                    XÉT NGHIỆM: <span id="pt-name"></span> - MỨC: <span id="pt-level"></span>
+                </div>
+
+                <div class="stats-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="stat-card" style="padding: 12px;">
+                        <div class="stat-title">Mean Cài đặt</div>
+                        <input type="number" step="any" id="config-mean" disabled style="font-weight: bold; border:none; background:transparent;">
+                    </div>
+                    <div class="stat-card" style="padding: 12px;">
+                        <div class="stat-title">SD Cài đặt</div>
+                        <input type="number" step="any" id="config-sd" disabled style="font-weight: bold; border:none; background:transparent;">
+                    </div>
+                    <div class="stat-card" style="padding: 12px; background: #e8f5e9; border-left-color: var(--success);">
+                        <div class="stat-title">Mean Thực tế</div>
+                        <div class="stat-value" id="calc-mean" style="font-size: 18px;">-</div>
+                    </div>
+                    <div class="stat-card" style="padding: 12px; background: #e8f5e9; border-left-color: var(--success);">
+                        <div class="stat-title">SD Thực tế</div>
+                        <div class="stat-value" id="calc-sd" style="font-size: 18px;">-</div>
+                    </div>
+                    <div class="stat-card" style="padding: 12px; background: #fff8e1; border-left-color: var(--warning);">
+                        <div class="stat-title">CV% Thực tế</div>
+                        <div class="stat-value" id="calc-cv" style="font-size: 18px;">-</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title">Biểu đồ Levey-Jennings</h3>
+                    <div class="chart-container" id="svg-chart-container"></div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title">Bảng dữ liệu Nội kiểm</h3>
+                    <div class="table-wrap">
+                        <table id="qc-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 80px;">Ngày</th>
+                                    <th style="width: 150px;">Giá trị QC</th>
+                                    <th>Đánh giá Westgard</th>
+                                    <th>Ghi chú / Khắc phục</th>
+                                </tr>
+                            </thead>
+                            <tbody id="qc-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CẤU HÌNH XÉT NGHIỆM -->
+            <div id="view-config" class="view-section hidden">
+                <div class="flex justify-between items-center" style="margin-bottom: 20px;">
+                    <h3 class="card-title" style="margin:0; border:none;">Quản lý Thông số Xét nghiệm</h3>
+                    <div class="flex gap-2">
+                        <select id="new-test-category" class="btn btn-outline">
+                            <option value="biochem">Sinh hóa</option>
+                            <option value="hematology">Huyết học</option>
+                        </select>
+                        <input type="text" id="new-test-name" placeholder="Tên XN (VD: URIC)" class="btn btn-outline" style="width: 150px;">
+                        <button class="btn btn-primary" onclick="addNewTest()">➕ Thêm Mới</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <p style="font-size: 13px; color: var(--danger); margin-bottom: 12px; font-weight:bold;">Lưu ý: Thông số cài đặt ở đây sẽ được đồng bộ lên Cloud và áp dụng cho tất cả các tháng. Bấm "Lưu Cấu Hình" để ghi nhận!</p>
+                    <table style="font-size: 13px;">
+                        <thead>
+                            <tr>
+                                <th>Phân loại</th><th>Tên XN</th>
+                                <th>Mean (Control N)</th><th>SD (Control N)</th>
+                                <th>Mean (Control P)</th><th>SD (Control P)</th>
+                                <th>Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody id="config-tbody"></tbody>
+                    </table>
+                    <div style="margin-top: 20px; text-align:right;">
+                        <button class="btn btn-success" onclick="saveConfig()">☁️ Lưu Cấu Hình</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CÀI ĐẶT HỆ THỐNG -->
+            <div id="view-settings" class="view-section hidden">
+                <div class="card" style="max-width: 600px;">
+                    <h3 class="card-title">Cài đặt Thông tin LIS</h3>
+                    <div class="form-group">
+                        <label>Tên Bệnh Viện / Phòng Khám</label>
+                        <input type="text" id="set-hospital">
+                    </div>
+                    <div class="form-group">
+                        <label>Tên Khoa</label>
+                        <input type="text" id="set-dept">
+                    </div>
+                    <div class="form-group">
+                        <label>Tên Trưởng Khoa / Phụ trách</label>
+                        <input type="text" id="set-head">
+                    </div>
+
+                    <h3 class="card-title" style="margin-top: 30px;">Quy tắc Westgard</h3>
+                    <label class="rule-checkbox"><input type="checkbox" id="rule-12s"> Quy tắc 1-2s (Cảnh báo khi vượt ±2SD)</label>
+                    <label class="rule-checkbox"><input type="checkbox" id="rule-13s"> Quy tắc 1-3s (Từ chối khi vượt ±3SD)</label>
+                    <label class="rule-checkbox"><input type="checkbox" id="rule-22s"> Quy tắc 2-2s (2 điểm liên tiếp vượt cùng chiều ±2SD)</label>
+                    <label class="rule-checkbox"><input type="checkbox" id="rule-r4s"> Quy tắc R-4s (Chênh lệch giữa 2 ngày vượt 4SD)</label>
+                    <label class="rule-checkbox"><input type="checkbox" id="rule-41s"> Quy tắc 4-1s (4 điểm liên tiếp vượt cùng chiều ±1SD)</label>
+                    <label class="rule-checkbox"><input type="checkbox" id="rule-10x"> Quy tắc 10x (10 điểm nằm cùng một phía Mean)</label>
+
+                    <button class="btn btn-primary" style="margin-top: 20px;" onclick="saveSettings()">☁️ Lưu Cài Đặt Lên Cloud</button>
+                </div>
+            </div>
+
+            <!-- FOOTER IN ẤN -->
+            <div id="print-footer">
+                <div style="text-align: center;"><strong>Người thực hiện</strong><br><br><br><br><span>KTV Xét Nghiệm</span></div>
+                <div style="text-align: center;"><strong>Phụ trách / Trưởng khoa</strong><br><br><br><br><span id="print-head-signature" style="font-weight: bold;"></span></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Import Excel / Paste -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal" style="max-width:900px;">
+            <h3 style="color:var(--primary-dark); margin-bottom:10px;">📥 Nhập dữ liệu đầu vào từ Excel</h3>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;">
+                Hệ thống tự nhận diện các sheet <strong>Control N</strong> và <strong>Control P</strong>,
+                cột <strong>Ngày</strong> và các cột xét nghiệm; tự đổi tháng/năm theo ngày trong file. Dữ liệu sẽ tự động đồng bộ lên Cloud sau khi import.
+            </p>
+            <div style="border:2px dashed var(--primary);background:var(--primary-light);border-radius:8px;padding:20px;text-align:center;margin-bottom:16px;">
+                <div style="font-size:30px;margin-bottom:8px;">📊</div>
+                <div style="font-weight:600;margin-bottom:6px;">Chọn file Excel để nhập trực tiếp</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Hỗ trợ .xlsx, .xls, .csv</div>
+                <input id="excel-file-input" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelFile(this.files[0])">
+                <button class="btn btn-primary" onclick="document.getElementById('excel-file-input').click()">📂 Chọn file Excel</button>
+                <div id="excel-file-status" style="margin-top:10px;font-size:12px;min-height:18px;"></div>
+            </div>
+            <div style="text-align:center;color:var(--text-muted);font-size:12px;margin:10px 0;">— HOẶC DÁN TỪ EXCEL —</div>
+            <textarea id="paste-area" placeholder="Dán vùng dữ liệu từ Excel tại đây..."></textarea>
+            <div class="flex justify-between" style="margin-top:10px;">
+                <button class="btn btn-outline" onclick="closeImportModal()">Đóng / Hủy</button>
+                <button class="btn btn-success" onclick="processPastedData()">✔️ Phân tích & Lưu lên Cloud</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <!-- TẢI THƯ VIỆN EXCEL & FIREBASE SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+    
+    <script>
+        // =========================================================================
+        // MÃ CẤU HÌNH ĐÃ ĐƯỢC BỔ SUNG DATABASE URL BẮT BUỘC
+        // =========================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBw4T3CqG0_-Jnpvjwv5ZNYQhfJLh163yM",
+            authDomain: "iqcphoyen.firebaseapp.com",
+            databaseURL: "https://iqcphoyen-default-rtdb.asia-southeast1.firebasedatabase.app", // Nếu gặp lỗi trắng trang, hãy thử đổi đuôi thành .firebaseio.com
+            projectId: "iqcphoyen",
+            storageBucket: "iqcphoyen.firebasestorage.app",
+            messagingSenderId: "813937126796",
+            appId: "1:813937126796:web:b600bf0c429a02999cbaa9",
+            measurementId: "G-GCLGZH7HRC"
+        };
+        // =========================================================================
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const database = firebase.database();
+
+        // Dữ liệu mặc định từ NSX 
+        const DEFAULT_CONFIG = {
+            "URE": { level1: { mean: 9.29, sd: 0.62 }, level2: { mean: 22.9, sd: 1.5 } },
+            "GLU": { level1: { mean: 4.76, sd: 0.24 }, level2: { mean: 11.5, sd: 0.85 } },
+            "CRE": { level1: { mean: 103, sd: 6.0 }, level2: { mean: 296, sd: 26.5 } },
+            "URIC": { level1: { mean: 323, sd: 16 }, level2: { mean: 654, sd: 49 } },
+            "BILT": { level1: { mean: 13.1, sd: 1.5 }, level2: { mean: 66, sd: 10.0 } },
+            "BILD": { level1: { mean: 5.3, sd: 0.54 }, level2: { mean: 25, sd: 3.75 } },
+            "PRO": { level1: { mean: 56, sd: 2.3 }, level2: { mean: 86, sd: 5.25 } },
+            "ALB": { level1: { mean: 36.6, sd: 2.2 }, level2: { mean: 56, sd: 5.25 } },
+            "CHO": { level1: { mean: 3.4, sd: 0.17 }, level2: { mean: 5.9, sd: 0.45 } },
+            "TRI": { level1: { mean: 0.63, sd: 0.03 }, level2: { mean: 1.4, sd: 0.12 } },
+            "HDL-C": { level1: { mean: 1.09, sd: 0.09 }, level2: { mean: 1.9, sd: 0.25 } },
+            "LDL": { level1: { mean: 1.36, sd: 0.11 }, level2: { mean: 2.5, sd: 0.32 } },
+            "AST": { level1: { mean: 41.0, sd: 3.5 }, level2: { mean: 134, sd: 12.0 } },
+            "ALT": { level1: { mean: 40.0, sd: 2.7 }, level2: { mean: 127, sd: 11.5 } },
+            "GGT": { level1: { mean: 38.3, sd: 2.3 }, level2: { mean: 148, sd: 13.5 } },
+            "A.U": { level1: { mean: 2.4, sd: 0.1 }, level2: { mean: 3.3, sd: 0.2 } },
+            "AMY": { level1: { mean: 111, sd: 7.0 }, level2: { mean: 199, sd: 18 } },
+            "HBA1C": { level1: { mean: 5.8, sd: 0.45 }, level2: { mean: 11, sd: 1.1 } }
+        };
+
+        let currentMonth = "08"; let currentYear = "2026";
+        let appData = { biochem: {}, hematology: {}, settings: {} };
+        let activeCategory = 'biochem'; let currentTest = ""; let currentLevel = "level1";
+        const GLOBAL_SETTINGS_KEY = 'IQC_GLOBAL_SETTINGS_V6';
+
+        // ================= KẾT NỐI & TẢI DỮ LIỆU TỪ FIREBASE =================
+        async function initDB() {
+            document.getElementById('page-main-title').innerText = "☁️ Đang đồng bộ dữ liệu từ Cloud...";
+            let selM = document.getElementById('sel-month'); let selY = document.getElementById('sel-year');
+            if(selM) currentMonth = selM.value; if(selY) currentYear = selY.value;
+
+            try {
+                // 1. Tải Settings & Cấu hình NSX
+                let snapSettings = await database.ref(GLOBAL_SETTINGS_KEY).once('value');
+                let gData = snapSettings.val();
+                
+                if (gData) {
+                    appData.settings = gData.settings || {};
+                    appData.biochem_config = gData.biochem_config || {};
+                    appData.hematology_config = gData.hematology_config || {};
+                } else {
+                    // Khởi tạo lần đầu
+                    appData.settings = { hospital: "BỆNH VIỆN PHỔ YÊN", dept: "Khoa Xét nghiệm", head: "Hà Thị Son", rules: { r12s: true, r13s: true, r22s: true, rr4s: true, r41s: true, r10x: true } };
+                    appData.biochem_config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+                    appData.hematology_config = { "WBC": { level1: { mean: 5.0, sd: 0.5 }, level2: { mean: 15.0, sd: 1.5 } } };
+                    await database.ref(GLOBAL_SETTINGS_KEY).set({ settings: appData.settings, biochem_config: appData.biochem_config, hematology_config: appData.hematology_config });
+                }
+
+                // 2. Tải Dữ liệu tháng hiện tại
+                let monthKey = `IQC_DATA_${currentMonth}_${currentYear}_V6`;
+                let snapData = await database.ref(monthKey).once('value');
+                let mData = snapData.val();
+
+                if (mData) {
+                    appData.biochem = mData.biochem || {}; appData.hematology = mData.hematology || {};
+                    syncConfigToData();
+                } else {
+                    appData.biochem = {}; appData.hematology = {};
+                    Object.keys(appData.biochem_config).forEach(k => {
+                        appData.biochem[k] = createTestObj(appData.biochem_config[k].level1.mean, appData.biochem_config[k].level1.sd, [], appData.biochem_config[k].level2.mean, appData.biochem_config[k].level2.sd, []);
+                    });
+                    // Tự động lưu form rỗng lên cloud
+                    await database.ref(monthKey).set({ biochem: appData.biochem, hematology: appData.hematology });
+                }
+                
+                updateTimeUI(); applySettingsToUI();
+                let view = document.querySelector('.view-section:not(.hidden)').id;
+                if(view === 'view-dashboard') updateDashboard();
+                if(view === 'view-qc-entry') { buildTestSelector(); loadTestData(); }
+
+            } catch (error) {
+                console.error("Lỗi Firebase:", error);
+                document.getElementById('page-main-title').innerText = "❌ Lỗi kết nối Cloud. Hãy kiểm tra lại Database URL.";
+                alert("Lỗi tải dữ liệu đám mây: Bạn chưa cấu hình quyền truy cập (Rules) hoặc kết nối bị từ chối.");
+            }
+        }
+
+        function syncConfigToData() {
+            ['biochem', 'hematology'].forEach(cat => {
+                let conf = appData[cat + '_config'];
+                Object.keys(conf).forEach(k => {
+                    if (!appData[cat][k]) {
+                        appData[cat][k] = createTestObj(conf[k].level1.mean, conf[k].level1.sd, [], conf[k].level2.mean, conf[k].level2.sd, []);
+                    } else {
+                        appData[cat][k].level1.mean = conf[k].level1.mean; appData[cat][k].level1.sd = conf[k].level1.sd;
+                        appData[cat][k].level2.mean = conf[k].level2.mean; appData[cat][k].level2.sd = conf[k].level2.sd;
+                    }
+                });
+            });
+        }
+
+        function changeTime() { initDB(); }
+
+        function updateTimeUI() {
+            let mStr = `Tháng: ${currentMonth}/${currentYear}`;
+            document.getElementById('print-month-year').innerText = mStr;
+            let titlePrefix = activeCategory === 'biochem' ? "Sinh Hóa" : "Huyết Học";
+            document.getElementById('page-main-title').innerText = `${titlePrefix} - Tháng ${currentMonth}/${currentYear}`;
+            document.getElementById('dash-log-title').innerText = `Nhật ký cảnh báo (Tháng ${currentMonth}/${currentYear})`;
+        }
+
+        function createTestObj(m1, sd1, arr1, m2, sd2, arr2) {
+            let d1 = new Array(31).fill(null).map(()=>({value: null, note: ""})); let d2 = new Array(31).fill(null).map(()=>({value: null, note: ""}));
+            if(arr1) arr1.forEach((v, i) => { if(i<31 && v!=null) d1[i].value = v; }); if(arr2) arr2.forEach((v, i) => { if(i<31 && v!=null) d2[i].value = v; });
+            return { level1: { mean: m1, sd: sd1, data: d1 }, level2: { mean: m2, sd: sd2, data: d2 } };
+        }
+
+        function switchView(viewId, el, cat = null) {
+            document.querySelectorAll('.view-section').forEach(v => v.classList.add('hidden')); document.getElementById('view-' + (viewId==='qc-entry' ? 'qc-entry' : viewId)).classList.remove('hidden');
+            document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active')); if(el) el.classList.add('active');
+            if(viewId === 'dashboard') updateDashboard(); if(viewId === 'config') renderConfig(); if(viewId === 'qc-entry') { activeCategory = cat; updateTimeUI(); buildTestSelector(); loadTestData(); }
+        }
+
+        function renderConfig() {
+            let tbody = document.getElementById('config-tbody'); tbody.innerHTML = '';
+            ['biochem', 'hematology'].forEach(cat => {
+                let catName = cat === 'biochem' ? 'Sinh hóa' : 'Huyết học'; let conf = appData[cat + '_config'];
+                Object.keys(conf).forEach(k => {
+                    let t = conf[k];
+                    tbody.innerHTML += `<tr>
+                        <td><span class="badge ${cat==='biochem'?'bg-primary':'bg-danger'}">${catName}</span></td>
+                        <td style="font-weight:bold;">${k}</td>
+                        <td><input type="number" step="any" value="${t.level1.mean}" onchange="updateCfg('${cat}','${k}', 'level1', 'mean', this.value)"></td>
+                        <td><input type="number" step="any" value="${t.level1.sd}" onchange="updateCfg('${cat}','${k}', 'level1', 'sd', this.value)"></td>
+                        <td><input type="number" step="any" value="${t.level2.mean}" onchange="updateCfg('${cat}','${k}', 'level2', 'mean', this.value)"></td>
+                        <td><input type="number" step="any" value="${t.level2.sd}" onchange="updateCfg('${cat}','${k}', 'level2', 'sd', this.value)"></td>
+                        <td><button class="btn btn-danger" style="padding:4px 8px; font-size:12px;" onclick="deleteTest('${cat}','${k}')">Xóa</button></td>
+                    </tr>`;
+                });
+            });
+        }
+        function updateCfg(cat, test, lvl, field, val) { appData[cat + '_config'][test][lvl][field] = parseFloat(val); }
+        function addNewTest() {
+            let cat = document.getElementById('new-test-category').value; let name = document.getElementById('new-test-name').value.trim().toUpperCase();
+            if(!name) return alert("Vui lòng nhập tên Xét nghiệm"); if(appData[cat + '_config'][name]) return alert("Xét nghiệm này đã tồn tại!");
+            appData[cat + '_config'][name] = { level1: { mean: 10, sd: 1 }, level2: { mean: 20, sd: 2 } }; document.getElementById('new-test-name').value = ''; renderConfig();
+        }
+        function deleteTest(cat, test) {
+            if(confirm(`Bạn có chắc muốn xóa Xét nghiệm ${test}? Mọi dữ liệu các tháng sẽ bị mất khi lưu.`)){ delete appData[cat + '_config'][test]; delete appData[cat][test]; renderConfig(); }
+        }
+        function saveConfig() { 
+            database.ref(GLOBAL_SETTINGS_KEY).set({ settings: appData.settings, biochem_config: appData.biochem_config, hematology_config: appData.hematology_config })
+            .then(() => { syncConfigToData(); saveData(false); alert("☁️ Đã đồng bộ Cấu hình lên Cloud!"); });
+        }
+
+        function buildTestSelector() {
+            let sel = document.getElementById('test-selector'); sel.innerHTML = ''; let keys = Object.keys(appData[activeCategory]);
+            if(keys.length === 0) { sel.innerHTML = '<option>Không có Xét nghiệm</option>'; return; }
+            keys.forEach(k => { sel.innerHTML += `<option value="${k}">${k}</option>`; }); currentTest = keys[0];
+        }
+
+        function loadTestData() {
+            let sel = document.getElementById('test-selector');
+            if(!sel.value || sel.value.includes("Không có")) { document.getElementById('svg-chart-container').innerHTML = ''; document.getElementById('qc-tbody').innerHTML = ''; return; }
+            currentTest = sel.value; currentLevel = document.getElementById('level-selector').value;
+            
+            document.getElementById('pt-name').innerText = currentTest; document.getElementById('pt-level').innerText = currentLevel === "level1" ? "Control N" : "Control P";
+            let testObj = appData[activeCategory][currentTest][currentLevel];
+            document.getElementById('config-mean').value = testObj.mean; document.getElementById('config-sd').value = testObj.sd;
+
+            let tbody = document.getElementById('qc-tbody'); tbody.innerHTML = ''; let dataArr = testObj.data;
+            
+            for(let i=0; i<31; i++) {
+                let val = dataArr[i].value !== null ? dataArr[i].value : ""; let note = dataArr[i].note || "";
+                tbody.innerHTML += `<tr>
+                    <td>${i+1}/${currentMonth}</td>
+                    <td><input type="number" step="any" value="${val}" data-day="${i}" onchange="syncInput(this)"></td>
+                    <td id="status-day-${i}"></td>
+                    <td><input type="text" value="${note}" data-day="${i}" placeholder="..." onchange="syncInput(this)"></td>
+                </tr>`;
+            }
+            updateChartAndStats();
+        }
+
+        function updateChartAndStats() {
+            let testObj = appData[activeCategory][currentTest][currentLevel]; let dataArr = testObj.data; let evals = evaluateWestgard(dataArr, testObj.mean, testObj.sd);
+            let validCount = 0; let sum = 0; let sqSum = 0;
+
+            for(let i=0; i<31; i++) {
+                let val = dataArr[i].value !== null ? dataArr[i].value : ""; let err = evals[i];
+                let badgeClass = err ? (err.rules.includes("Cảnh báo") ? "bg-warning" : "bg-danger") : (val !== "" ? "bg-success" : "");
+                let statusText = err ? err.rules : (val !== "" ? "Đạt" : "-");
+
+                let stCell = document.getElementById(`status-day-${i}`);
+                if (stCell) stCell.innerHTML = val !== "" ? `<span class="badge ${badgeClass}">${statusText}</span>` : "";
+                if (val !== "") { sum += parseFloat(val); validCount++; }
+            }
+
+            if (validCount > 1) {
+                let rM = sum / validCount; dataArr.forEach(d => { if(d.value !== null) sqSum += Math.pow(parseFloat(d.value) - rM, 2); });
+                let rSD = Math.sqrt(sqSum / (validCount - 1));
+                document.getElementById('calc-mean').innerText = rM.toFixed(2); document.getElementById('calc-sd').innerText = rSD.toFixed(3); document.getElementById('calc-cv').innerText = ((rSD / rM) * 100).toFixed(2) + "%";
+            } else {
+                document.getElementById('calc-mean').innerText = "-"; document.getElementById('calc-sd').innerText = "-"; document.getElementById('calc-cv').innerText = "-";
+            }
+            drawSVGChart(dataArr, testObj.mean, testObj.sd, evals);
+        }
+
+        function syncInput(el) {
+            let day = parseInt(el.getAttribute('data-day')); let val = el.value.trim();
+            if(el.type === 'number') { appData[activeCategory][currentTest][currentLevel].data[day].value = val === "" ? null : parseFloat(val); } else { appData[activeCategory][currentTest][currentLevel].data[day].note = val; }
+            saveData(false); updateChartAndStats(); 
+        }
+
+        // ĐẨY DỮ LIỆU LÊN FIREBASE REALTIME DB
+        function saveData(showAlert = true) { 
+            let monthKey = `IQC_DATA_${currentMonth}_${currentYear}_V6`;
+            database.ref(monthKey).set({ biochem: appData.biochem, hematology: appData.hematology })
+            .then(() => {
+                updateDashboard();
+                if(showAlert) alert(`☁️ Đã lưu dữ liệu Tháng ${currentMonth}/${currentYear} lên Cloud thành công!`);
+            })
+            .catch((error) => {
+                alert("❌ Lỗi khi lưu lên Cloud: " + error.message);
+            });
+        }
+
+        function exportDataExcel() {
+            if(!window.XLSX) { alert("Thư viện Excel đang được tải, vui lòng thử lại sau vài giây."); return; }
+            let testObj = appData[activeCategory][currentTest][currentLevel]; let dataArr = testObj.data; let evals = evaluateWestgard(dataArr, testObj.mean, testObj.sd);
+            let exportData = [];
+            for(let i=0; i<31; i++) {
+                let val = dataArr[i].value !== null ? dataArr[i].value : ""; let note = dataArr[i].note || ""; let err = evals[i]; let status = err ? err.rules : (val !== "" ? "Đạt" : "");
+                exportData.push({ "Ngày": `${i+1}/${currentMonth}/${currentYear}`, "Giá trị QC": val, "Đánh giá Westgard": status, "Ghi chú": note });
+            }
+            let ws = XLSX.utils.json_to_sheet(exportData); let wb = XLSX.utils.book_new(); let lvlName = currentLevel === "level1" ? "Control_N" : "Control_P";
+            XLSX.utils.book_append_sheet(wb, ws, "QC_Data"); XLSX.writeFile(wb, `IQC_${currentTest}_${lvlName}_T${currentMonth}_${currentYear}.xlsx`);
+        }
+
+        const EXCEL_TEST_MAP = {
+            "URE":"URE", "GLU":"GLU", "CRE":"CRE", "URIC":"URIC", "URIC ACID":"URIC", "ACID": "URIC", "BIL T":"BILT", "BIL-T": "BILT", "BILT":"BILT", "BIL D":"BILD", "BIL-D": "BILD", "BILD":"BILD", 
+            "PRO":"PRO", "ALBUMIN": "ALB", "ALB":"ALB", "CHOLES": "CHO", "CHOL":"CHO", "CHO":"CHO", "TRY":"TRI", "TRI":"TRI", "HDL":"HDL-C", "HDL-C":"HDL-C", "LDL":"LDL", "OT": "AST", "GOT":"AST", "AST":"AST", 
+            "PT": "ALT", "GPT":"ALT", "ALT":"ALT", "GGT":"GGT", "CANXI":"A.U", "CA":"A.U", "A.U":"A.U", "AMY":"AMY", "HBA1C":"HBA1C", "HB A1C":"HBA1C", "HBA1C%":"HBA1C"
+        };
+
+        function normalizeExcelHeader(v) { return String(v == null ? "" : v).trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " "); }
+        function mapExcelTestName(v) { const n = normalizeExcelHeader(v); return EXCEL_TEST_MAP[n] || n.replace(/\s+/g,""); }
+        function openImportModal() { document.getElementById('paste-area').value=''; const fi = document.getElementById('excel-file-input'); if(fi) fi.value=''; const st = document.getElementById('excel-file-status'); if(st) st.innerHTML=''; document.getElementById('importModal').style.display='flex'; }
+        function closeImportModal() { document.getElementById('importModal').style.display='none'; }
+        function parseExcelDate(value) {
+            if (value === null || value === undefined) return null; if (value instanceof Date && !isNaN(value)) return value;
+            if (typeof value === 'number' && window.XLSX && window.XLSX.SSF) { const d = XLSX.SSF.parse_date_code(value); if(d) return new Date(d.y, d.m - 1, d.d); }
+            if (typeof value === 'string') {
+                const s = value.trim(); let m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/); if(m) return new Date(+m[1], +m[2] - 1, +m[3]);
+                m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); if(m) return new Date(+m[3], +m[2] - 1, +m[1]);
+                const fallback = new Date(s); if (!isNaN(fallback)) return fallback;
+            } return null;
+        }
+        function toExcelNumber(v) {
+            if(v === null || v === undefined || String(v).trim() === '') return null; if(typeof v === 'number') return Number.isFinite(v) ? v : null;
+            let str = String(v).trim().replace(/\s/g, '').replace(',', '.').replace(/[<>]/g, ''); const n = parseFloat(str); return Number.isFinite(n) ? n : null;
+        }
+        function isDateHeader(h) { let n = normalizeExcelHeader(h); return n.includes('NGAY') || n.includes('DATE') || n.includes('DAY') || n.includes('THOIGIAN'); }
+        function findHeaderRow(rows) { for(let i = 0; i < Math.min(rows.length, 10); i++) { const h = (rows[i] || []).map(normalizeExcelHeader); if(h.some(isDateHeader)) return i; } return -1; }
+        
+        function ensureImportedTest(cat, testName) {
+            let conf = appData[cat + '_config']; let existing = conf[testName];
+            if (!existing) { conf[testName] = { level1: { mean: 0, sd: 1 }, level2: { mean: 0, sd: 1 } }; existing = conf[testName]; }
+            if (!appData[cat][testName]) { appData[cat][testName] = createTestObj(existing.level1.mean, existing.level1.sd, [], existing.level2.mean, existing.level2.sd, []); }
+            return appData[cat][testName];
+        }
+
+        async function setImportedMonthYear(date) {
+            if(!date || isNaN(date)) return;
+            const mm = String(date.getMonth() + 1).padStart(2, '0'); const yy = String(date.getFullYear());
+            if (mm === currentMonth && yy === currentYear) return;
+            currentMonth = mm; currentYear = yy;
+            
+            const sm = document.getElementById('sel-month'); const sy = document.getElementById('sel-year');
+            if (sm) sm.value = mm;
+            if (sy) { if(![...sy.options].some(o => o.value === yy)) { const op = document.createElement('option'); op.value = yy; op.textContent = yy; sy.appendChild(op); } sy.value = yy; }
+            
+            // Re-fetch from Firebase for the new month
+            let monthKey = `IQC_DATA_${currentMonth}_${currentYear}_V6`;
+            let snapData = await database.ref(monthKey).once('value');
+            let mData = snapData.val();
+            if (mData) { appData.biochem = mData.biochem || {}; appData.hematology = mData.hematology || {}; } 
+            else { appData.biochem = {}; appData.hematology = {}; }
+            syncConfigToData(); updateTimeUI();
+        }
+
+        function importSheetMatrix(rows, sheetName, sheetIdx, result) {
+            if(!rows || !rows.length) return; const hi = findHeaderRow(rows); if(hi < 0) return;
+            const headers = rows[hi] || []; const dateCol = headers.findIndex(isDateHeader); if(dateCol < 0) return;
+            
+            let level = null; let nS = String(sheetName).toUpperCase().replace(/\s+/g, ''); 
+            if (nS.includes('CONTROLP') || nS.includes('LEVEL2') || nS.includes('MUC2') || nS === 'P') level = 'level2';
+            else if (nS.includes('CONTROLN') || nS.includes('LEVEL1') || nS.includes('MUC1') || nS === 'N') level = 'level1';
+            if (!level) { level = (sheetIdx === 0) ? 'level1' : 'level2'; }
+            
+            const columns = []; headers.forEach((h, idx) => { if (idx !== dateCol) { const name = mapExcelTestName(h); if(name) columns.push({ idx, name }); } });
+            
+            let sheetCount = 0;
+            for(let r = hi + 1; r < rows.length; r++) {
+                const row = rows[r] || []; const date = parseExcelDate(row[dateCol]); if(!date) continue;
+                const m = String(date.getMonth() + 1).padStart(2, '0'); const y = String(date.getFullYear());
+                if (m !== currentMonth || y !== currentYear) continue; 
+                const day = date.getDate(); if(day < 1 || day > 31) continue;
+                
+                columns.forEach(c => {
+                    const val = toExcelNumber(row[c.idx]); if(val === null) return;
+                    let cat = (appData.biochem_config[c.name] || appData.biochem[c.name]) ? 'biochem' : ((appData.hematology_config[c.name] || appData.hematology[c.name]) ? 'hematology' : 'biochem');
+                    const obj = ensureImportedTest(cat, c.name); obj[level].data[day - 1].value = val; 
+                    result.tests.add(c.name); if (level === 'level1') result.valuesN++; else result.valuesP++; sheetCount++;
+                });
+            }
+            if (sheetCount > 0) result.sheets.push(`${sheetName} -> ${level === 'level1' ? 'Control N' : 'Control P'} (${sheetCount} giá trị)`);
+        }
+
+        async function handleExcelFile(file) {
+            if(!file) return; const status = document.getElementById('excel-file-status'); status.innerHTML = '<span style="color:var(--primary)">⏳ Đang đọc file Excel...</span>';
+            try {
+                if(!window.XLSX) throw new Error('Thư viện Excel chưa tải.');
+                const buffer = await file.arrayBuffer(); const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+                let allRows = {}; let monthCounts = {}; let bestDate = null; let maxCount = 0;
+
+                wb.SheetNames.forEach(name => {
+                    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: true });
+                    allRows[name] = rows; const hi = findHeaderRow(rows);
+                    if (hi >= 0) {
+                        const dateCol = (rows[hi] || []).findIndex(isDateHeader);
+                        if (dateCol >= 0) {
+                            for(let r = hi + 1; r < rows.length; r++) {
+                                let d = parseExcelDate(rows[r][dateCol]);
+                                if (d) { 
+                                    let key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); monthCounts[key] = (monthCounts[key] || 0) + 1;
+                                    if (monthCounts[key] > maxCount) { maxCount = monthCounts[key]; bestDate = d; }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                if (!bestDate) throw new Error('Không tìm thấy cột Ngày.');
+                await setImportedMonthYear(bestDate); // Đợi lấy data cloud tháng mới
+
+                const result = { sheets: [], tests: new Set(), valuesN: 0, valuesP: 0 };
+                wb.SheetNames.forEach((name, idx) => { importSheetMatrix(allRows[name], name, idx, result); });
+
+                let totalValues = result.valuesN + result.valuesP;
+                if (totalValues === 0) throw new Error('Không có dữ liệu số.');
+
+                saveData(false); buildTestSelector(); loadTestData(); renderConfig();
+                status.innerHTML = `<div style="color:var(--success); font-size:14px; margin-bottom:8px;">✔ <strong>Import thành công!</strong></div>`;
+                alert(`☁️ Đã Import & Đồng bộ lên Cloud!\n\nTháng: ${currentMonth}/${currentYear}\nTổng: ${totalValues} giá trị.`);
+                closeImportModal(); document.getElementById('excel-file-input').value = '';
+
+            } catch(err) { console.error(err); status.innerHTML = `<span style="color:var(--danger)">❌ ${err.message}</span>`; alert('Lỗi: ' + err.message); }
+        }
+
+        function processPastedData() {
+            let text = document.getElementById('paste-area').value.trim(); if(!text){alert("Chưa có dữ liệu!");return;}
+            let lines = text.split(/\r?\n/), updatedCount = 0;
+            lines.forEach(line => {
+                let cols = line.split(/\t/); if(cols.length < 2) return;
+                let testName = mapExcelTestName(cols[0]);
+                let cat = appData.biochem[testName] ? 'biochem' : (appData.hematology[testName] ? 'hematology' : null); if(!cat) cat = activeCategory; 
+                let target = ensureImportedTest(cat, testName);
+                for(let i = 1; i <= 31; i++) { if(i < cols.length) { let v = toExcelNumber(cols[i]); if (v !== null) target[currentLevel].data[i - 1].value = v; } }
+                updatedCount++;
+            });
+            closeImportModal(); loadTestData(); saveData(false); alert(`☁️ Đã Import & Đồng bộ Cloud cho ${updatedCount} Xét nghiệm!`);
+        }
+
+        function evaluateWestgard(dataArray, mean, sd) {
+            let rCfg = appData.settings.rules; let vPts = []; let map = [];
+            dataArray.forEach((it, idx) => { if (it.value !== null) { vPts.push(parseFloat(it.value)); map.push(idx); } }); let errs = new Array(31).fill(null);
+            for (let i = 0; i < vPts.length; i++) {
+                let z = (vPts[i] - mean) / sd; let dIdx = map[i]; let r = [];
+                if (rCfg.r13s && Math.abs(z) >= 3) r.push("1-3s");
+                if (i >= 1) { let zP = (vPts[i-1] - mean) / sd; if (rCfg.r22s && ((z>=2 && zP>=2) || (z<=-2 && zP<=-2))) r.push("2-2s"); if (rCfg.rr4s && Math.abs(z - zP) >= 4) r.push("R-4s"); }
+                if (i >= 3 && rCfg.r41s) { let z1 = (vPts[i-1] - mean)/sd; let z2 = (vPts[i-2] - mean)/sd; let z3 = (vPts[i-3] - mean)/sd; if ((z>=1 && z1>=1 && z2>=1 && z3>=1) || (z<=-1 && z1<=-1 && z2<=-1 && z3<=-1)) r.push("4-1s"); }
+                if (i >= 9 && rCfg.r10x) { let p=true, n=true; for (let j=0; j<10; j++) { let zC = (vPts[i-j]-mean)/sd; if(zC<0)p=false; if(zC>0)n=false; } if (p||n) r.push("10x"); }
+                if (r.length===0 && rCfg.r12s && Math.abs(z)>=2) r.push("1-2s (Cảnh báo)");
+                if (r.length>0) errs[dIdx] = { rules: r.join(", "), isWarn: r[0].includes("Cảnh báo") };
+            } return errs;
+        }
+
+        function drawSVGChart(dataArr, mean, sd, evals) {
+            const cont = document.getElementById('svg-chart-container'); const w = cont.clientWidth || 800; const h = 350; const pad = { top: 20, right: 30, bottom: 40, left: 60 };
+            const gW = w - pad.left - pad.right; const gH = h - pad.top - pad.bottom; const sSD = sd === 0 ? 1 : sd; const yM = mean + (4 * sSD); const ym = mean - (4 * sSD);
+            const valY = (val) => pad.top + gH - ((val - ym) / (yM - ym) * gH); const dayX = (idx) => pad.left + (idx * (gW / 30));
+            let svg = `<svg class="lj-chart" viewBox="0 0 ${w} ${h}">`;
+            for(let i=0; i<31; i++) { let x = dayX(i); svg += `<line x1="${x}" y1="${pad.top}" x2="${x}" y2="${h - pad.bottom}" class="chart-grid" />`; if(i%2===0) svg += `<text x="${x}" y="${h - pad.bottom + 15}" text-anchor="middle" class="axis-text">${i+1}</text>`; }
+            const lines = [{v:mean+3*sSD,c:'line-sd3',l:'+3SD'},{v:mean+2*sSD,c:'line-sd2',l:'+2SD'},{v:mean+1*sSD,c:'line-sd1',l:'+1SD'}, {v:mean,c:'line-mean',l:'Mean'},{v:mean-1*sSD,c:'line-sd1',l:'-1SD'},{v:mean-2*sSD,c:'line-sd2',l:'-2SD'},{v:mean-3*sSD,c:'line-sd3',l:'-3SD'}];
+            lines.forEach(l => { let y = valY(l.v); svg += `<line x1="${pad.left}" y1="${y}" x2="${w-pad.right}" y2="${y}" class="${l.c}" />`; svg += `<text x="${pad.left-5}" y="${y+4}" text-anchor="end" class="axis-text" font-weight="bold">${l.l}</text>`; svg += `<text x="${w-pad.right+5}" y="${y+4}" text-anchor="start" class="axis-text">${l.v.toFixed(2)}</text>`; });
+            let pts = []; for(let i=0; i<31; i++) if(dataArr[i].value !== null) pts.push({x:dayX(i), y:valY(dataArr[i].value)});
+            if(pts.length>0) { let pD = `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map(p => `L ${p.x} ${p.y}`).join(' '); svg += `<path d="${pD}" class="data-line" />`; }
+            for(let i=0; i<31; i++) { if(dataArr[i].value !== null) { let err = evals[i]; let fill = err ? (err.isWarn ? "var(--warning)" : "var(--danger)") : "var(--primary)"; let tip = `Ngày ${i+1}: ${dataArr[i].value} ${err?'<br>Lỗi: '+err.rules:''}`; svg += `<circle cx="${dayX(i)}" cy="${valY(dataArr[i].value)}" r="4" fill="${fill}" onmouseover="showTooltip(evt, '${tip}')" onmouseout="hideTooltip()" style="cursor:pointer; stroke:white; stroke-width:1;" />`; } }
+            cont.innerHTML = svg + `</svg>`;
+        }
+
+        const tooltip = document.getElementById('tooltip');
+        function showTooltip(evt, txt) { tooltip.innerHTML=txt; tooltip.style.display="block"; tooltip.style.left=(evt.pageX+15)+'px'; tooltip.style.top=(evt.pageY-25)+'px'; }
+        function hideTooltip() { tooltip.style.display="none"; }
+
+        function applySettingsToUI() {
+            let s = appData.settings; document.getElementById('ui-hospital-name').innerText = s.hospital; document.getElementById('ui-user-name').innerText = s.head; document.getElementById('ui-dept-name').innerText = s.dept;
+            document.getElementById('print-hospital').innerText = s.hospital; document.getElementById('print-dept').innerText = s.dept; document.getElementById('print-head-signature').innerText = s.head;
+            document.getElementById('set-hospital').value = s.hospital; document.getElementById('set-dept').value = s.dept; document.getElementById('set-head').value = s.head;
+            document.getElementById('rule-12s').checked = s.rules.r12s; document.getElementById('rule-13s').checked = s.rules.r13s; document.getElementById('rule-22s').checked = s.rules.r22s;
+            document.getElementById('rule-r4s').checked = s.rules.rr4s; document.getElementById('rule-41s').checked = s.rules.r41s; document.getElementById('rule-10x').checked = s.rules.r10x;
+        }
+
+        function saveSettings() {
+            appData.settings.hospital = document.getElementById('set-hospital').value; appData.settings.dept = document.getElementById('set-dept').value; appData.settings.head = document.getElementById('set-head').value;
+            appData.settings.rules = { r12s: document.getElementById('rule-12s').checked, r13s: document.getElementById('rule-13s').checked, r22s: document.getElementById('rule-22s').checked, rr4s: document.getElementById('rule-r4s').checked, r41s: document.getElementById('rule-41s').checked, r10x: document.getElementById('rule-10x').checked };
+            database.ref(GLOBAL_SETTINGS_KEY).set({ settings: appData.settings, biochem_config: appData.biochem_config, hematology_config: appData.hematology_config }).then(() => { applySettingsToUI(); alert("☁️ Đã lưu Cài đặt Bệnh viện lên Cloud!"); });
+        }
+
+        function updateDashboard() {
+            document.getElementById('dash-bio-count').innerText = Object.keys(appData.biochem).length + " Test"; document.getElementById('dash-hem-count').innerText = Object.keys(appData.hematology).length + " Test";
+            let vCnt = 0; let logB = document.getElementById('violation-log-body'); logB.innerHTML = '';
+            ['biochem', 'hematology'].forEach(cat => {
+                let catN = cat==='biochem'?'Sinh hóa':'Huyết học';
+                Object.keys(appData[cat]).forEach(tn => {
+                    ['level1','level2'].forEach(lvl => {
+                        let tO = appData[cat][tn][lvl]; let ev = evaluateWestgard(tO.data, tO.mean, tO.sd);
+                        ev.forEach((err, idx) => { if(err && !err.isWarn) { vCnt++; logB.innerHTML += `<tr><td>${idx+1}/${currentMonth}/${currentYear}</td><td>${catN}</td><td><b>${tn}</b></td><td>${lvl==='level1'?'Control N':'Control P'}</td><td><span class="badge bg-danger">${err.rules}</span></td></tr>`; } });
+                    });
+                });
+            });
+            document.getElementById('dash-violations').innerText = vCnt;
+        }
+
+        async function exportDataJSON() {
+            try {
+                let snapAll = await database.ref().once('value'); let allData = snapAll.val();
+                let fullBackup = { global_settings: allData[GLOBAL_SETTINGS_KEY], months: {} };
+                for (let k in allData) { if(k.startsWith('IQC_DATA_')) fullBackup.months[k] = allData[k]; }
+                const dl = document.createElement('a'); dl.setAttribute("href", "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullBackup)));
+                dl.setAttribute("download", `IQC_Phoyen_CloudBackup_${currentMonth}_${currentYear}.json`); document.body.appendChild(dl); dl.click(); dl.remove();
+            } catch (e) { alert("Lỗi tải bản sao lưu từ đám mây: " + e.message); }
+        }
+
+        window.onload = () => { initDB(); switchView('dashboard'); window.addEventListener('resize', () => { if(!document.getElementById('view-qc-entry').classList.contains('hidden')) updateChartAndStats(); }); };
+    </script>
+</body>
+</html>
