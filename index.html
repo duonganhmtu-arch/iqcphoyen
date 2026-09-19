@@ -386,7 +386,7 @@
     
     <script>
         // =========================================================================
-        // MÃ CẤU HÌNH ĐÃ ĐƯỢC CHUẨN HÓA
+        // MÃ CẤU HÌNH FIREBASE
         // =========================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyBw4T3CqG0_-Jnpvjwv5ZNYQhfJLh163yM",
@@ -405,7 +405,7 @@
         }
         const database = firebase.database();
 
-        // Dữ liệu mặc định từ NSX 
+        // Dữ liệu mặc định từ NSX (Đã sửa lỗi mã A.U thành AU)
         const DEFAULT_CONFIG = {
             "URE": { level1: { mean: 9.29, sd: 0.62 }, level2: { mean: 22.9, sd: 1.5 } },
             "GLU": { level1: { mean: 4.76, sd: 0.24 }, level2: { mean: 11.5, sd: 0.85 } },
@@ -422,7 +422,7 @@
             "AST": { level1: { mean: 41.0, sd: 3.5 }, level2: { mean: 134, sd: 12.0 } },
             "ALT": { level1: { mean: 40.0, sd: 2.7 }, level2: { mean: 127, sd: 11.5 } },
             "GGT": { level1: { mean: 38.3, sd: 2.3 }, level2: { mean: 148, sd: 13.5 } },
-            "A.U": { level1: { mean: 2.4, sd: 0.1 }, level2: { mean: 3.3, sd: 0.2 } },
+            "AU": { level1: { mean: 2.4, sd: 0.1 }, level2: { mean: 3.3, sd: 0.2 } },
             "AMY": { level1: { mean: 111, sd: 7.0 }, level2: { mean: 199, sd: 18 } },
             "HBA1C": { level1: { mean: 5.8, sd: 0.45 }, level2: { mean: 11, sd: 1.1 } }
         };
@@ -447,6 +447,13 @@
                     appData.settings = gData.settings || {};
                     appData.biochem_config = gData.biochem_config || {};
                     appData.hematology_config = gData.hematology_config || {};
+                    
+                    // Xóa key cũ bị lỗi nếu nó vô tình bị lưu vào từ trước
+                    if(appData.biochem_config["A.U"]) {
+                        appData.biochem_config["AU"] = appData.biochem_config["A.U"];
+                        delete appData.biochem_config["A.U"];
+                        database.ref(GLOBAL_SETTINGS_KEY).set({ settings: appData.settings, biochem_config: appData.biochem_config, hematology_config: appData.hematology_config });
+                    }
                 } else {
                     appData.settings = { hospital: "BỆNH VIỆN PHỔ YÊN", dept: "Khoa Xét nghiệm", head: "Hà Thị Son", rules: { r12s: true, r13s: true, r22s: true, rr4s: true, r41s: true, r10x: true } };
                     appData.biochem_config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
@@ -461,6 +468,13 @@
 
                 if (mData) {
                     appData.biochem = mData.biochem || {}; appData.hematology = mData.hematology || {};
+                    
+                    // Xóa key cũ bị lỗi trong dữ liệu tháng
+                    if(appData.biochem["A.U"]) {
+                        appData.biochem["AU"] = appData.biochem["A.U"];
+                        delete appData.biochem["A.U"];
+                        database.ref(monthKey).set({ biochem: appData.biochem, hematology: appData.hematology });
+                    }
                     syncConfigToData();
                 } else {
                     appData.biochem = {}; appData.hematology = {};
@@ -609,6 +623,7 @@
             saveData(false); updateChartAndStats(); 
         }
 
+        // ĐẨY DỮ LIỆU LÊN FIREBASE REALTIME DB
         function saveData(showAlert = true) { 
             let monthKey = `IQC_DATA_${currentMonth}_${currentYear}_V6`;
             database.ref(monthKey).set({ biochem: appData.biochem, hematology: appData.hematology })
@@ -631,10 +646,11 @@
             XLSX.utils.book_append_sheet(wb, ws, "QC_Data"); XLSX.writeFile(wb, `IQC_${currentTest}_${lvlName}_T${currentMonth}_${currentYear}.xlsx`);
         }
 
+        // Ánh xạ lỗi A.U thành AU
         const EXCEL_TEST_MAP = {
             "URE":"URE", "GLU":"GLU", "CRE":"CRE", "URIC":"URIC", "URIC ACID":"URIC", "ACID": "URIC", "BIL T":"BILT", "BIL-T": "BILT", "BILT":"BILT", "BIL D":"BILD", "BIL-D": "BILD", "BILD":"BILD", 
             "PRO":"PRO", "ALBUMIN": "ALB", "ALB":"ALB", "CHOLES": "CHO", "CHOL":"CHO", "CHO":"CHO", "TRY":"TRI", "TRI":"TRI", "HDL":"HDL-C", "HDL-C":"HDL-C", "LDL":"LDL", "OT": "AST", "GOT":"AST", "AST":"AST", 
-            "PT": "ALT", "GPT":"ALT", "ALT":"ALT", "GGT":"GGT", "CANXI":"A.U", "CA":"A.U", "A.U":"A.U", "AMY":"AMY", "HBA1C":"HBA1C", "HB A1C":"HBA1C", "HBA1C%":"HBA1C"
+            "PT": "ALT", "GPT":"ALT", "ALT":"ALT", "GGT":"GGT", "CANXI":"AU", "CA":"AU", "A.U":"AU", "AU":"AU", "AMY":"AMY", "HBA1C":"HBA1C", "HB A1C":"HBA1C", "HBA1C%":"HBA1C"
         };
 
         function normalizeExcelHeader(v) { return String(v == null ? "" : v).trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " "); }
