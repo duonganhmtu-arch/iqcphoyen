@@ -95,7 +95,7 @@
         .modal textarea { width: 100%; height: 250px; padding: 12px; border: 1px solid var(--border); margin-bottom: 16px; resize: none; font-family: monospace; font-size: 12px; white-space: pre;}
         .hidden { display: none !important; }
 
-        /* ================= IN ẤN (PRINT) CẬP NHẬT CHỐNG CẮT TRANG ================= */
+        /* ================= IN ẤN (PRINT) ================= */
         .print-only { display: none; }
         @media print {
             body { height: auto !important; overflow: visible !important; background: white; font-size: 12pt; display: block !important; }
@@ -176,19 +176,6 @@
         </header>
 
         <div class="content-area">
-            
-            <!-- HEADER IN ẤN -->
-            <div id="print-header">
-                <div style="text-align: center; line-height: 1.5;">
-                    <strong style="font-size: 16px; text-transform: uppercase;" id="print-hospital">BỆNH VIỆN PHỔ YÊN</strong><br>
-                    <span style="font-size: 14px; text-transform: uppercase; font-weight: bold;" id="print-dept">KHOA XÉT NGHIỆM</span>
-                </div>
-                <div style="text-align: center; line-height: 1.5;">
-                    <strong style="font-size: 16px;">BIỂU ĐỒ NỘI KIỂM CHẤT LƯỢNG (LEVEY-JENNINGS)</strong><br>
-                    <span style="font-size: 14px;" id="print-month-year">Tháng: 08/2026</span>
-                </div>
-            </div>
-
             <!-- DASHBOARD -->
             <div id="view-dashboard" class="view-section">
                 <div class="stats-grid">
@@ -343,12 +330,6 @@
                     <button class="btn btn-primary" style="margin-top: 20px;" onclick="saveSettings()">☁️ Lưu Cài Đặt Lên Cloud</button>
                 </div>
             </div>
-
-            <!-- FOOTER IN ẤN -->
-            <div id="print-footer">
-                <div style="text-align: center;"><strong>Người thực hiện</strong><br><br><br><br><span>KTV Xét Nghiệm</span></div>
-                <div style="text-align: center;"><strong>Phụ trách / Trưởng khoa</strong><br><br><br><br><span id="print-head-signature" style="font-weight: bold;"></span></div>
-            </div>
         </div>
     </main>
 
@@ -357,8 +338,7 @@
         <div class="modal" style="max-width:900px;">
             <h3 style="color:var(--primary-dark); margin-bottom:10px;">📥 Nhập dữ liệu đầu vào từ Excel</h3>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;">
-                Hệ thống tự nhận diện các sheet <strong>Control N</strong> và <strong>Control P</strong>,
-                cột <strong>Ngày</strong> và các cột xét nghiệm; tự đổi tháng/năm theo ngày trong file. Dữ liệu sẽ tự động đồng bộ lên Cloud sau khi import.
+                Hệ thống tự nhận diện các sheet <strong>Control N</strong> và <strong>Control P</strong>, cột <strong>Ngày</strong> và các cột xét nghiệm; tự đổi tháng/năm theo ngày trong file.
             </p>
             <div style="border:2px dashed var(--primary);background:var(--primary-light);border-radius:8px;padding:20px;text-align:center;margin-bottom:16px;">
                 <div style="font-size:30px;margin-bottom:8px;">📊</div>
@@ -405,7 +385,6 @@
         }
         const database = firebase.database();
 
-        // Dữ liệu mặc định từ NSX (Đã sửa lỗi mã A.U thành AU)
         const DEFAULT_CONFIG = {
             "URE": { level1: { mean: 9.29, sd: 0.62 }, level2: { mean: 22.9, sd: 1.5 } },
             "GLU": { level1: { mean: 4.76, sd: 0.24 }, level2: { mean: 11.5, sd: 0.85 } },
@@ -432,26 +411,30 @@
         let activeCategory = 'biochem'; let currentTest = ""; let currentLevel = "level1";
         const GLOBAL_SETTINGS_KEY = 'IQC_GLOBAL_SETTINGS_V6';
 
-        // ================= KẾT NỐI & TẢI DỮ LIỆU TỪ FIREBASE =================
+        // KHẮC PHỤC LỖI NAN: Luôn ép tạo giá trị rỗng "" hợp lệ thay vì null để chống Firebase xóa mảng
+        function createTestObj(m1, sd1, arr1, m2, sd2, arr2) {
+            let d1 = []; let d2 = [];
+            for(let i=0; i<31; i++) {
+                d1.push({ value: (arr1 && arr1[i] != null) ? arr1[i] : "", note: "" });
+                d2.push({ value: (arr2 && arr2[i] != null) ? arr2[i] : "", note: "" });
+            }
+            return { level1: { mean: m1, sd: sd1, data: d1 }, level2: { mean: m2, sd: sd2, data: d2 } };
+        }
+
         async function initDB() {
             document.getElementById('page-main-title').innerText = "☁️ Đang đồng bộ dữ liệu từ Cloud...";
             let selM = document.getElementById('sel-month'); let selY = document.getElementById('sel-year');
             if(selM) currentMonth = selM.value; if(selY) currentYear = selY.value;
 
             try {
-                // 1. Tải Settings & Cấu hình NSX
                 let snapSettings = await database.ref(GLOBAL_SETTINGS_KEY).once('value');
                 let gData = snapSettings.val();
-                
                 if (gData) {
                     appData.settings = gData.settings || {};
                     appData.biochem_config = gData.biochem_config || {};
                     appData.hematology_config = gData.hematology_config || {};
-                    
-                    // Xóa key cũ bị lỗi nếu nó vô tình bị lưu vào từ trước
                     if(appData.biochem_config["A.U"]) {
-                        appData.biochem_config["AU"] = appData.biochem_config["A.U"];
-                        delete appData.biochem_config["A.U"];
+                        appData.biochem_config["AU"] = appData.biochem_config["A.U"]; delete appData.biochem_config["A.U"];
                         database.ref(GLOBAL_SETTINGS_KEY).set({ settings: appData.settings, biochem_config: appData.biochem_config, hematology_config: appData.hematology_config });
                     }
                 } else {
@@ -461,18 +444,14 @@
                     await database.ref(GLOBAL_SETTINGS_KEY).set({ settings: appData.settings, biochem_config: appData.biochem_config, hematology_config: appData.hematology_config });
                 }
 
-                // 2. Tải Dữ liệu tháng hiện tại
                 let monthKey = `IQC_DATA_${currentMonth}_${currentYear}_V6`;
                 let snapData = await database.ref(monthKey).once('value');
                 let mData = snapData.val();
 
                 if (mData) {
                     appData.biochem = mData.biochem || {}; appData.hematology = mData.hematology || {};
-                    
-                    // Xóa key cũ bị lỗi trong dữ liệu tháng
                     if(appData.biochem["A.U"]) {
-                        appData.biochem["AU"] = appData.biochem["A.U"];
-                        delete appData.biochem["A.U"];
+                        appData.biochem["AU"] = appData.biochem["A.U"]; delete appData.biochem["A.U"];
                         database.ref(monthKey).set({ biochem: appData.biochem, hematology: appData.hematology });
                     }
                     syncConfigToData();
@@ -491,7 +470,7 @@
 
             } catch (error) {
                 console.error("Lỗi Firebase:", error);
-                document.getElementById('page-main-title').innerText = "❌ Lỗi kết nối Cloud. Vui lòng tải lại trang (F5).";
+                document.getElementById('page-main-title').innerText = "❌ Lỗi kết nối Cloud.";
                 alert("Lỗi tải dữ liệu đám mây: " + error.message);
             }
         }
@@ -518,12 +497,6 @@
             let titlePrefix = activeCategory === 'biochem' ? "Sinh Hóa" : "Huyết Học";
             document.getElementById('page-main-title').innerText = `${titlePrefix} - Tháng ${currentMonth}/${currentYear}`;
             document.getElementById('dash-log-title').innerText = `Nhật ký cảnh báo (Tháng ${currentMonth}/${currentYear})`;
-        }
-
-        function createTestObj(m1, sd1, arr1, m2, sd2, arr2) {
-            let d1 = new Array(31).fill(null).map(()=>({value: null, note: ""})); let d2 = new Array(31).fill(null).map(()=>({value: null, note: ""}));
-            if(arr1) arr1.forEach((v, i) => { if(i<31 && v!=null) d1[i].value = v; }); if(arr2) arr2.forEach((v, i) => { if(i<31 && v!=null) d2[i].value = v; });
-            return { level1: { mean: m1, sd: sd1, data: d1 }, level2: { mean: m2, sd: sd2, data: d2 } };
         }
 
         function switchView(viewId, el, cat = null) {
@@ -579,10 +552,13 @@
             let testObj = appData[activeCategory][currentTest][currentLevel];
             document.getElementById('config-mean').value = testObj.mean; document.getElementById('config-sd').value = testObj.sd;
 
-            let tbody = document.getElementById('qc-tbody'); tbody.innerHTML = ''; let dataArr = testObj.data;
+            let tbody = document.getElementById('qc-tbody'); tbody.innerHTML = ''; 
+            let dataArr = testObj.data || [];
             
             for(let i=0; i<31; i++) {
-                let val = dataArr[i].value !== null ? dataArr[i].value : ""; let note = dataArr[i].note || "";
+                let item = dataArr[i] || {}; 
+                let val = (item.value == null || item.value === "") ? "" : item.value; 
+                let note = item.note || "";
                 tbody.innerHTML += `<tr>
                     <td>${i+1}/${currentMonth}</td>
                     <td><input type="number" step="any" value="${val}" data-day="${i}" onchange="syncInput(this)"></td>
@@ -594,11 +570,15 @@
         }
 
         function updateChartAndStats() {
-            let testObj = appData[activeCategory][currentTest][currentLevel]; let dataArr = testObj.data; let evals = evaluateWestgard(dataArr, testObj.mean, testObj.sd);
+            let testObj = appData[activeCategory][currentTest][currentLevel]; 
+            let dataArr = testObj.data || []; 
+            let evals = evaluateWestgard(dataArr, testObj.mean, testObj.sd);
             let validCount = 0; let sum = 0; let sqSum = 0;
 
             for(let i=0; i<31; i++) {
-                let val = dataArr[i].value !== null ? dataArr[i].value : ""; let err = evals[i];
+                let item = dataArr[i] || {}; 
+                let val = (item.value == null || item.value === "") ? "" : item.value;
+                let err = evals[i];
                 let badgeClass = err ? (err.rules.includes("Cảnh báo") ? "bg-warning" : "bg-danger") : (val !== "" ? "bg-success" : "");
                 let statusText = err ? err.rules : (val !== "" ? "Đạt" : "-");
 
@@ -608,7 +588,12 @@
             }
 
             if (validCount > 1) {
-                let rM = sum / validCount; dataArr.forEach(d => { if(d.value !== null) sqSum += Math.pow(parseFloat(d.value) - rM, 2); });
+                let rM = sum / validCount; 
+                for(let i=0; i<31; i++) {
+                    let item = dataArr[i] || {}; 
+                    let val = (item.value == null || item.value === "") ? "" : item.value;
+                    if(val !== "") sqSum += Math.pow(parseFloat(val) - rM, 2);
+                }
                 let rSD = Math.sqrt(sqSum / (validCount - 1));
                 document.getElementById('calc-mean').innerText = rM.toFixed(2); document.getElementById('calc-sd').innerText = rSD.toFixed(3); document.getElementById('calc-cv').innerText = ((rSD / rM) * 100).toFixed(2) + "%";
             } else {
@@ -619,11 +604,12 @@
 
         function syncInput(el) {
             let day = parseInt(el.getAttribute('data-day')); let val = el.value.trim();
-            if(el.type === 'number') { appData[activeCategory][currentTest][currentLevel].data[day].value = val === "" ? null : parseFloat(val); } else { appData[activeCategory][currentTest][currentLevel].data[day].note = val; }
+            let targetArr = appData[activeCategory][currentTest][currentLevel].data;
+            if (!targetArr[day]) targetArr[day] = {value: "", note: ""}; // Vá mảng khuyết
+            if(el.type === 'number') { targetArr[day].value = val === "" ? "" : parseFloat(val); } else { targetArr[day].note = val; }
             saveData(false); updateChartAndStats(); 
         }
 
-        // ĐẨY DỮ LIỆU LÊN FIREBASE REALTIME DB
         function saveData(showAlert = true) { 
             let monthKey = `IQC_DATA_${currentMonth}_${currentYear}_V6`;
             database.ref(monthKey).set({ biochem: appData.biochem, hematology: appData.hematology })
@@ -636,17 +622,21 @@
 
         function exportDataExcel() {
             if(!window.XLSX) { alert("Thư viện Excel đang được tải, vui lòng thử lại sau vài giây."); return; }
-            let testObj = appData[activeCategory][currentTest][currentLevel]; let dataArr = testObj.data; let evals = evaluateWestgard(dataArr, testObj.mean, testObj.sd);
+            let testObj = appData[activeCategory][currentTest][currentLevel]; 
+            let dataArr = testObj.data || []; 
+            let evals = evaluateWestgard(dataArr, testObj.mean, testObj.sd);
             let exportData = [];
+            
             for(let i=0; i<31; i++) {
-                let val = dataArr[i].value !== null ? dataArr[i].value : ""; let note = dataArr[i].note || ""; let err = evals[i]; let status = err ? err.rules : (val !== "" ? "Đạt" : "");
+                let item = dataArr[i] || {}; 
+                let val = (item.value == null || item.value === "") ? "" : item.value;
+                let note = item.note || ""; let err = evals[i]; let status = err ? err.rules : (val !== "" ? "Đạt" : "");
                 exportData.push({ "Ngày": `${i+1}/${currentMonth}/${currentYear}`, "Giá trị QC": val, "Đánh giá Westgard": status, "Ghi chú": note });
             }
             let ws = XLSX.utils.json_to_sheet(exportData); let wb = XLSX.utils.book_new(); let lvlName = currentLevel === "level1" ? "Control_N" : "Control_P";
             XLSX.utils.book_append_sheet(wb, ws, "QC_Data"); XLSX.writeFile(wb, `IQC_${currentTest}_${lvlName}_T${currentMonth}_${currentYear}.xlsx`);
         }
 
-        // Ánh xạ lỗi A.U thành AU
         const EXCEL_TEST_MAP = {
             "URE":"URE", "GLU":"GLU", "CRE":"CRE", "URIC":"URIC", "URIC ACID":"URIC", "ACID": "URIC", "BIL T":"BILT", "BIL-T": "BILT", "BILT":"BILT", "BIL D":"BILD", "BIL-D": "BILD", "BILD":"BILD", 
             "PRO":"PRO", "ALBUMIN": "ALB", "ALB":"ALB", "CHOLES": "CHO", "CHOL":"CHO", "CHO":"CHO", "TRY":"TRI", "TRI":"TRI", "HDL":"HDL-C", "HDL-C":"HDL-C", "LDL":"LDL", "OT": "AST", "GOT":"AST", "AST":"AST", 
@@ -657,6 +647,7 @@
         function mapExcelTestName(v) { const n = normalizeExcelHeader(v); return EXCEL_TEST_MAP[n] || n.replace(/\s+/g,""); }
         function openImportModal() { document.getElementById('paste-area').value=''; const fi = document.getElementById('excel-file-input'); if(fi) fi.value=''; const st = document.getElementById('excel-file-status'); if(st) st.innerHTML=''; document.getElementById('importModal').style.display='flex'; }
         function closeImportModal() { document.getElementById('importModal').style.display='none'; }
+        
         function parseExcelDate(value) {
             if (value === null || value === undefined) return null; if (value instanceof Date && !isNaN(value)) return value;
             if (typeof value === 'number' && window.XLSX && window.XLSX.SSF) { const d = XLSX.SSF.parse_date_code(value); if(d) return new Date(d.y, d.m - 1, d.d); }
@@ -666,6 +657,7 @@
                 const fallback = new Date(s); if (!isNaN(fallback)) return fallback;
             } return null;
         }
+        
         function toExcelNumber(v) {
             if(v === null || v === undefined || String(v).trim() === '') return null; if(typeof v === 'number') return Number.isFinite(v) ? v : null;
             let str = String(v).trim().replace(/\s/g, '').replace(',', '.').replace(/[<>]/g, ''); const n = parseFloat(str); return Number.isFinite(n) ? n : null;
@@ -719,7 +711,9 @@
                 columns.forEach(c => {
                     const val = toExcelNumber(row[c.idx]); if(val === null) return;
                     let cat = (appData.biochem_config[c.name] || appData.biochem[c.name]) ? 'biochem' : ((appData.hematology_config[c.name] || appData.hematology[c.name]) ? 'hematology' : 'biochem');
-                    const obj = ensureImportedTest(cat, c.name); obj[level].data[day - 1].value = val; 
+                    const obj = ensureImportedTest(cat, c.name); 
+                    if (!obj[level].data[day - 1]) obj[level].data[day - 1] = {value: "", note: ""}; // Vá mảng khuyết
+                    obj[level].data[day - 1].value = val; 
                     result.tests.add(c.name); if (level === 'level1') result.valuesN++; else result.valuesP++; sheetCount++;
                 });
             }
@@ -775,7 +769,15 @@
                 let testName = mapExcelTestName(cols[0]);
                 let cat = appData.biochem[testName] ? 'biochem' : (appData.hematology[testName] ? 'hematology' : null); if(!cat) cat = activeCategory; 
                 let target = ensureImportedTest(cat, testName);
-                for(let i = 1; i <= 31; i++) { if(i < cols.length) { let v = toExcelNumber(cols[i]); if (v !== null) target[currentLevel].data[i - 1].value = v; } }
+                for(let i = 1; i <= 31; i++) { 
+                    if(i < cols.length) { 
+                        let v = toExcelNumber(cols[i]); 
+                        if (v !== null) {
+                            if (!target[currentLevel].data[i - 1]) target[currentLevel].data[i - 1] = {value: "", note: ""}; // Vá mảng khuyết
+                            target[currentLevel].data[i - 1].value = v; 
+                        }
+                    } 
+                }
                 updatedCount++;
             });
             closeImportModal(); loadTestData(); saveData(false); alert(`☁️ Đã Import & Đồng bộ Cloud cho ${updatedCount} Xét nghiệm!`);
@@ -783,7 +785,14 @@
 
         function evaluateWestgard(dataArray, mean, sd) {
             let rCfg = appData.settings.rules; let vPts = []; let map = [];
-            dataArray.forEach((it, idx) => { if (it.value !== null) { vPts.push(parseFloat(it.value)); map.push(idx); } }); let errs = new Array(31).fill(null);
+            
+            for (let i = 0; i < 31; i++) {
+                let item = dataArray[i] || {};
+                let val = (item.value == null || item.value === "") ? "" : item.value;
+                if (val !== "") { vPts.push(parseFloat(val)); map.push(i); }
+            }
+            
+            let errs = new Array(31).fill(null);
             for (let i = 0; i < vPts.length; i++) {
                 let z = (vPts[i] - mean) / sd; let dIdx = map[i]; let r = [];
                 if (rCfg.r13s && Math.abs(z) >= 3) r.push("1-3s");
@@ -803,15 +812,26 @@
             for(let i=0; i<31; i++) { let x = dayX(i); svg += `<line x1="${x}" y1="${pad.top}" x2="${x}" y2="${h - pad.bottom}" class="chart-grid" />`; if(i%2===0) svg += `<text x="${x}" y="${h - pad.bottom + 15}" text-anchor="middle" class="axis-text">${i+1}</text>`; }
             const lines = [{v:mean+3*sSD,c:'line-sd3',l:'+3SD'},{v:mean+2*sSD,c:'line-sd2',l:'+2SD'},{v:mean+1*sSD,c:'line-sd1',l:'+1SD'}, {v:mean,c:'line-mean',l:'Mean'},{v:mean-1*sSD,c:'line-sd1',l:'-1SD'},{v:mean-2*sSD,c:'line-sd2',l:'-2SD'},{v:mean-3*sSD,c:'line-sd3',l:'-3SD'}];
             lines.forEach(l => { let y = valY(l.v); svg += `<line x1="${pad.left}" y1="${y}" x2="${w-pad.right}" y2="${y}" class="${l.c}" />`; svg += `<text x="${pad.left-5}" y="${y+4}" text-anchor="end" class="axis-text" font-weight="bold">${l.l}</text>`; svg += `<text x="${w-pad.right+5}" y="${y+4}" text-anchor="start" class="axis-text">${l.v.toFixed(2)}</text>`; });
-            let pts = []; for(let i=0; i<31; i++) if(dataArr[i].value !== null) pts.push({x:dayX(i), y:valY(dataArr[i].value)});
+            
+            let pts = []; 
+            for(let i=0; i<31; i++) {
+                let item = dataArr[i] || {};
+                let val = (item.value == null || item.value === "") ? "" : item.value;
+                if(val !== "") pts.push({x:dayX(i), y:valY(val)});
+            }
             if(pts.length>0) { let pD = `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map(p => `L ${p.x} ${p.y}`).join(' '); svg += `<path d="${pD}" class="data-line" />`; }
-            for(let i=0; i<31; i++) { if(dataArr[i].value !== null) { let err = evals[i]; let fill = err ? (err.isWarn ? "var(--warning)" : "var(--danger)") : "var(--primary)"; let tip = `Ngày ${i+1}: ${dataArr[i].value} ${err?'<br>Lỗi: '+err.rules:''}`; svg += `<circle cx="${dayX(i)}" cy="${valY(dataArr[i].value)}" r="4" fill="${fill}" onmouseover="showTooltip(evt, '${tip}')" onmouseout="hideTooltip()" style="cursor:pointer; stroke:white; stroke-width:1;" />`; } }
+            
+            for(let i=0; i<31; i++) { 
+                let item = dataArr[i] || {};
+                let val = (item.value == null || item.value === "") ? "" : item.value;
+                if(val !== "") { 
+                    let err = evals[i]; let fill = err ? (err.isWarn ? "var(--warning)" : "var(--danger)") : "var(--primary)"; 
+                    let tip = `Ngày ${i+1}: ${val} ${err?'<br>Lỗi: '+err.rules:''}`; 
+                    svg += `<circle cx="${dayX(i)}" cy="${valY(val)}" r="4" fill="${fill}" onmouseover="showTooltip(evt, '${tip}')" onmouseout="hideTooltip()" style="cursor:pointer; stroke:white; stroke-width:1;" />`; 
+                } 
+            }
             cont.innerHTML = svg + `</svg>`;
         }
-
-        const tooltip = document.getElementById('tooltip');
-        function showTooltip(evt, txt) { tooltip.innerHTML=txt; tooltip.style.display="block"; tooltip.style.left=(evt.pageX+15)+'px'; tooltip.style.top=(evt.pageY-25)+'px'; }
-        function hideTooltip() { tooltip.style.display="none"; }
 
         function applySettingsToUI() {
             let s = appData.settings; document.getElementById('ui-hospital-name').innerText = s.hospital; document.getElementById('ui-user-name').innerText = s.head; document.getElementById('ui-dept-name').innerText = s.dept;
