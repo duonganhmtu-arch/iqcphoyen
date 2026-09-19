@@ -95,7 +95,7 @@
         .modal textarea { width: 100%; height: 250px; padding: 12px; border: 1px solid var(--border); margin-bottom: 16px; resize: none; font-family: monospace; font-size: 12px; white-space: pre;}
         .hidden { display: none !important; }
 
-        /* ================= IN ẤN (PRINT) ================= */
+        /* ================= IN ẤN (PRINT) CẬP NHẬT CHỐNG CẮT TRANG ================= */
         .print-only { display: none; }
         @media print {
             body { height: auto !important; overflow: visible !important; background: white; font-size: 12pt; display: block !important; }
@@ -176,6 +176,19 @@
         </header>
 
         <div class="content-area">
+            
+            <!-- HEADER IN ẤN -->
+            <div id="print-header">
+                <div style="text-align: center; line-height: 1.5;">
+                    <strong style="font-size: 16px; text-transform: uppercase;" id="print-hospital">BỆNH VIỆN PHỔ YÊN</strong><br>
+                    <span style="font-size: 14px; text-transform: uppercase; font-weight: bold;" id="print-dept">KHOA XÉT NGHIỆM</span>
+                </div>
+                <div style="text-align: center; line-height: 1.5;">
+                    <strong style="font-size: 16px;">BIỂU ĐỒ NỘI KIỂM CHẤT LƯỢNG (LEVEY-JENNINGS)</strong><br>
+                    <span style="font-size: 14px;" id="print-month-year">Tháng: 08/2026</span>
+                </div>
+            </div>
+
             <!-- DASHBOARD -->
             <div id="view-dashboard" class="view-section">
                 <div class="stats-grid">
@@ -330,6 +343,12 @@
                     <button class="btn btn-primary" style="margin-top: 20px;" onclick="saveSettings()">☁️ Lưu Cài Đặt Lên Cloud</button>
                 </div>
             </div>
+
+            <!-- FOOTER IN ẤN -->
+            <div id="print-footer">
+                <div style="text-align: center;"><strong>Người thực hiện</strong><br><br><br><br><span>KTV Xét Nghiệm</span></div>
+                <div style="text-align: center;"><strong>Phụ trách / Trưởng khoa</strong><br><br><br><br><span id="print-head-signature" style="font-weight: bold;"></span></div>
+            </div>
         </div>
     </main>
 
@@ -365,9 +384,14 @@
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
     
     <script>
-        // =========================================================================
+        // HÀM BỌC THÉP DOM (Safe DOM) CHỐNG LỖI HIỂN THỊ "Cannot set properties of null"
+        function el(id) { return document.getElementById(id); }
+        function setText(id, txt) { let e = el(id); if(e) e.innerText = txt; }
+        function setHTML(id, html) { let e = el(id); if(e) e.innerHTML = html; }
+        function setVal(id, val) { let e = el(id); if(e) e.value = val; }
+        function setCheck(id, chk) { let e = el(id); if(e) e.checked = chk; }
+
         // MÃ CẤU HÌNH FIREBASE
-        // =========================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyBw4T3CqG0_-Jnpvjwv5ZNYQhfJLh163yM",
             authDomain: "iqcphoyen.firebaseapp.com",
@@ -378,11 +402,8 @@
             appId: "1:813937126796:web:b600bf0c429a02999cbaa9",
             measurementId: "G-GCLGZH7HRC"
         };
-        // =========================================================================
 
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
         const DEFAULT_CONFIG = {
@@ -411,7 +432,6 @@
         let activeCategory = 'biochem'; let currentTest = ""; let currentLevel = "level1";
         const GLOBAL_SETTINGS_KEY = 'IQC_GLOBAL_SETTINGS_V6';
 
-        // KHẮC PHỤC LỖI NAN: Luôn ép tạo giá trị rỗng "" hợp lệ thay vì null để chống Firebase xóa mảng
         function createTestObj(m1, sd1, arr1, m2, sd2, arr2) {
             let d1 = []; let d2 = [];
             for(let i=0; i<31; i++) {
@@ -422,8 +442,8 @@
         }
 
         async function initDB() {
-            document.getElementById('page-main-title').innerText = "☁️ Đang đồng bộ dữ liệu từ Cloud...";
-            let selM = document.getElementById('sel-month'); let selY = document.getElementById('sel-year');
+            setText('page-main-title', "☁️ Đang đồng bộ dữ liệu từ Cloud...");
+            let selM = el('sel-month'); let selY = el('sel-year');
             if(selM) currentMonth = selM.value; if(selY) currentYear = selY.value;
 
             try {
@@ -464,13 +484,16 @@
                 }
                 
                 updateTimeUI(); applySettingsToUI();
-                let view = document.querySelector('.view-section:not(.hidden)').id;
-                if(view === 'view-dashboard') updateDashboard();
-                if(view === 'view-qc-entry') { buildTestSelector(); loadTestData(); }
+                let activeViewEl = document.querySelector('.view-section:not(.hidden)');
+                if(activeViewEl) {
+                    let view = activeViewEl.id;
+                    if(view === 'view-dashboard') updateDashboard();
+                    if(view === 'view-qc-entry') { buildTestSelector(); loadTestData(); }
+                }
 
             } catch (error) {
                 console.error("Lỗi Firebase:", error);
-                document.getElementById('page-main-title').innerText = "❌ Lỗi kết nối Cloud.";
+                setText('page-main-title', "❌ Lỗi kết nối Cloud. Vui lòng tải lại trang (F5).");
                 alert("Lỗi tải dữ liệu đám mây: " + error.message);
             }
         }
@@ -493,20 +516,29 @@
 
         function updateTimeUI() {
             let mStr = `Tháng: ${currentMonth}/${currentYear}`;
-            document.getElementById('print-month-year').innerText = mStr;
+            setText('print-month-year', mStr);
             let titlePrefix = activeCategory === 'biochem' ? "Sinh Hóa" : "Huyết Học";
-            document.getElementById('page-main-title').innerText = `${titlePrefix} - Tháng ${currentMonth}/${currentYear}`;
-            document.getElementById('dash-log-title').innerText = `Nhật ký cảnh báo (Tháng ${currentMonth}/${currentYear})`;
+            setText('page-main-title', `${titlePrefix} - Tháng ${currentMonth}/${currentYear}`);
+            setText('dash-log-title', `Nhật ký cảnh báo (Tháng ${currentMonth}/${currentYear})`);
         }
 
-        function switchView(viewId, el, cat = null) {
-            document.querySelectorAll('.view-section').forEach(v => v.classList.add('hidden')); document.getElementById('view-' + (viewId==='qc-entry' ? 'qc-entry' : viewId)).classList.remove('hidden');
-            document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active')); if(el) el.classList.add('active');
-            if(viewId === 'dashboard') updateDashboard(); if(viewId === 'config') renderConfig(); if(viewId === 'qc-entry') { activeCategory = cat; updateTimeUI(); buildTestSelector(); loadTestData(); }
+        function switchView(viewId, curEl, cat = null) {
+            document.querySelectorAll('.view-section').forEach(v => v.classList.add('hidden')); 
+            let v = el('view-' + (viewId==='qc-entry' ? 'qc-entry' : viewId));
+            if(v) v.classList.remove('hidden');
+            
+            document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active')); 
+            if(curEl) curEl.classList.add('active');
+            
+            if(viewId === 'dashboard') updateDashboard(); 
+            if(viewId === 'config') renderConfig(); 
+            if(viewId === 'qc-entry') { activeCategory = cat; updateTimeUI(); buildTestSelector(); loadTestData(); }
         }
 
         function renderConfig() {
-            let tbody = document.getElementById('config-tbody'); tbody.innerHTML = '';
+            let tbody = el('config-tbody'); 
+            if(!tbody) return;
+            tbody.innerHTML = '';
             ['biochem', 'hematology'].forEach(cat => {
                 let catName = cat === 'biochem' ? 'Sinh hóa' : 'Huyết học'; let conf = appData[cat + '_config'];
                 Object.keys(conf).forEach(k => {
@@ -525,9 +557,11 @@
         }
         function updateCfg(cat, test, lvl, field, val) { appData[cat + '_config'][test][lvl][field] = parseFloat(val); }
         function addNewTest() {
-            let cat = document.getElementById('new-test-category').value; let name = document.getElementById('new-test-name').value.trim().toUpperCase();
+            let catEl = el('new-test-category'); let nameEl = el('new-test-name');
+            if(!catEl || !nameEl) return;
+            let cat = catEl.value; let name = nameEl.value.trim().toUpperCase();
             if(!name) return alert("Vui lòng nhập tên Xét nghiệm"); if(appData[cat + '_config'][name]) return alert("Xét nghiệm này đã tồn tại!");
-            appData[cat + '_config'][name] = { level1: { mean: 10, sd: 1 }, level2: { mean: 20, sd: 2 } }; document.getElementById('new-test-name').value = ''; renderConfig();
+            appData[cat + '_config'][name] = { level1: { mean: 10, sd: 1 }, level2: { mean: 20, sd: 2 } }; nameEl.value = ''; renderConfig();
         }
         function deleteTest(cat, test) {
             if(confirm(`Bạn có chắc muốn xóa Xét nghiệm ${test}? Mọi dữ liệu các tháng sẽ bị mất khi lưu.`)){ delete appData[cat + '_config'][test]; delete appData[cat][test]; renderConfig(); }
@@ -538,34 +572,38 @@
         }
 
         function buildTestSelector() {
-            let sel = document.getElementById('test-selector'); sel.innerHTML = ''; let keys = Object.keys(appData[activeCategory]);
+            let sel = el('test-selector'); 
+            if(!sel) return;
+            sel.innerHTML = ''; let keys = Object.keys(appData[activeCategory]);
             if(keys.length === 0) { sel.innerHTML = '<option>Không có Xét nghiệm</option>'; return; }
             keys.forEach(k => { sel.innerHTML += `<option value="${k}">${k}</option>`; }); currentTest = keys[0];
         }
 
         function loadTestData() {
-            let sel = document.getElementById('test-selector');
-            if(!sel.value || sel.value.includes("Không có")) { document.getElementById('svg-chart-container').innerHTML = ''; document.getElementById('qc-tbody').innerHTML = ''; return; }
-            currentTest = sel.value; currentLevel = document.getElementById('level-selector').value;
+            let sel = el('test-selector');
+            if(!sel || !sel.value || sel.value.includes("Không có")) { setHTML('svg-chart-container', ''); setHTML('qc-tbody', ''); return; }
+            currentTest = sel.value; 
+            currentLevel = el('level-selector') ? el('level-selector').value : 'level1';
             
-            document.getElementById('pt-name').innerText = currentTest; document.getElementById('pt-level').innerText = currentLevel === "level1" ? "Control N" : "Control P";
+            setText('pt-name', currentTest); setText('pt-level', currentLevel === "level1" ? "Control N" : "Control P");
             let testObj = appData[activeCategory][currentTest][currentLevel];
-            document.getElementById('config-mean').value = testObj.mean; document.getElementById('config-sd').value = testObj.sd;
+            setVal('config-mean', testObj.mean); setVal('config-sd', testObj.sd);
 
-            let tbody = document.getElementById('qc-tbody'); tbody.innerHTML = ''; 
+            let htmlTbody = '';
             let dataArr = testObj.data || [];
             
             for(let i=0; i<31; i++) {
                 let item = dataArr[i] || {}; 
                 let val = (item.value == null || item.value === "") ? "" : item.value; 
                 let note = item.note || "";
-                tbody.innerHTML += `<tr>
+                htmlTbody += `<tr>
                     <td>${i+1}/${currentMonth}</td>
                     <td><input type="number" step="any" value="${val}" data-day="${i}" onchange="syncInput(this)"></td>
                     <td id="status-day-${i}"></td>
                     <td><input type="text" value="${note}" data-day="${i}" placeholder="..." onchange="syncInput(this)"></td>
                 </tr>`;
             }
+            setHTML('qc-tbody', htmlTbody);
             updateChartAndStats();
         }
 
@@ -582,8 +620,7 @@
                 let badgeClass = err ? (err.rules.includes("Cảnh báo") ? "bg-warning" : "bg-danger") : (val !== "" ? "bg-success" : "");
                 let statusText = err ? err.rules : (val !== "" ? "Đạt" : "-");
 
-                let stCell = document.getElementById(`status-day-${i}`);
-                if (stCell) stCell.innerHTML = val !== "" ? `<span class="badge ${badgeClass}">${statusText}</span>` : "";
+                setHTML(`status-day-${i}`, val !== "" ? `<span class="badge ${badgeClass}">${statusText}</span>` : "");
                 if (val !== "") { sum += parseFloat(val); validCount++; }
             }
 
@@ -595,18 +632,18 @@
                     if(val !== "") sqSum += Math.pow(parseFloat(val) - rM, 2);
                 }
                 let rSD = Math.sqrt(sqSum / (validCount - 1));
-                document.getElementById('calc-mean').innerText = rM.toFixed(2); document.getElementById('calc-sd').innerText = rSD.toFixed(3); document.getElementById('calc-cv').innerText = ((rSD / rM) * 100).toFixed(2) + "%";
+                setText('calc-mean', rM.toFixed(2)); setText('calc-sd', rSD.toFixed(3)); setText('calc-cv', ((rSD / rM) * 100).toFixed(2) + "%");
             } else {
-                document.getElementById('calc-mean').innerText = "-"; document.getElementById('calc-sd').innerText = "-"; document.getElementById('calc-cv').innerText = "-";
+                setText('calc-mean', "-"); setText('calc-sd', "-"); setText('calc-cv', "-");
             }
             drawSVGChart(dataArr, testObj.mean, testObj.sd, evals);
         }
 
-        function syncInput(el) {
-            let day = parseInt(el.getAttribute('data-day')); let val = el.value.trim();
+        function syncInput(ele) {
+            let day = parseInt(ele.getAttribute('data-day')); let val = ele.value.trim();
             let targetArr = appData[activeCategory][currentTest][currentLevel].data;
-            if (!targetArr[day]) targetArr[day] = {value: "", note: ""}; // Vá mảng khuyết
-            if(el.type === 'number') { targetArr[day].value = val === "" ? "" : parseFloat(val); } else { targetArr[day].note = val; }
+            if (!targetArr[day]) targetArr[day] = {value: "", note: ""}; 
+            if(ele.type === 'number') { targetArr[day].value = val === "" ? "" : parseFloat(val); } else { targetArr[day].note = val; }
             saveData(false); updateChartAndStats(); 
         }
 
@@ -645,8 +682,8 @@
 
         function normalizeExcelHeader(v) { return String(v == null ? "" : v).trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " "); }
         function mapExcelTestName(v) { const n = normalizeExcelHeader(v); return EXCEL_TEST_MAP[n] || n.replace(/\s+/g,""); }
-        function openImportModal() { document.getElementById('paste-area').value=''; const fi = document.getElementById('excel-file-input'); if(fi) fi.value=''; const st = document.getElementById('excel-file-status'); if(st) st.innerHTML=''; document.getElementById('importModal').style.display='flex'; }
-        function closeImportModal() { document.getElementById('importModal').style.display='none'; }
+        function openImportModal() { setVal('paste-area', ''); setVal('excel-file-input', ''); setHTML('excel-file-status', ''); let m = el('importModal'); if(m) m.style.display='flex'; }
+        function closeImportModal() { let m = el('importModal'); if(m) m.style.display='none'; }
         
         function parseExcelDate(value) {
             if (value === null || value === undefined) return null; if (value instanceof Date && !isNaN(value)) return value;
@@ -678,7 +715,7 @@
             if (mm === currentMonth && yy === currentYear) return;
             currentMonth = mm; currentYear = yy;
             
-            const sm = document.getElementById('sel-month'); const sy = document.getElementById('sel-year');
+            const sm = el('sel-month'); const sy = el('sel-year');
             if (sm) sm.value = mm;
             if (sy) { if(![...sy.options].some(o => o.value === yy)) { const op = document.createElement('option'); op.value = yy; op.textContent = yy; sy.appendChild(op); } sy.value = yy; }
             
@@ -712,7 +749,7 @@
                     const val = toExcelNumber(row[c.idx]); if(val === null) return;
                     let cat = (appData.biochem_config[c.name] || appData.biochem[c.name]) ? 'biochem' : ((appData.hematology_config[c.name] || appData.hematology[c.name]) ? 'hematology' : 'biochem');
                     const obj = ensureImportedTest(cat, c.name); 
-                    if (!obj[level].data[day - 1]) obj[level].data[day - 1] = {value: "", note: ""}; // Vá mảng khuyết
+                    if (!obj[level].data[day - 1]) obj[level].data[day - 1] = {value: "", note: ""}; 
                     obj[level].data[day - 1].value = val; 
                     result.tests.add(c.name); if (level === 'level1') result.valuesN++; else result.valuesP++; sheetCount++;
                 });
@@ -721,7 +758,7 @@
         }
 
         async function handleExcelFile(file) {
-            if(!file) return; const status = document.getElementById('excel-file-status'); status.innerHTML = '<span style="color:var(--primary)">⏳ Đang đọc file Excel...</span>';
+            if(!file) return; setHTML('excel-file-status', '<span style="color:var(--primary)">⏳ Đang đọc file Excel...</span>');
             try {
                 if(!window.XLSX) throw new Error('Thư viện Excel chưa tải.');
                 const buffer = await file.arrayBuffer(); const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
@@ -754,15 +791,16 @@
                 if (totalValues === 0) throw new Error('Không có dữ liệu số.');
 
                 saveData(false); buildTestSelector(); loadTestData(); renderConfig();
-                status.innerHTML = `<div style="color:var(--success); font-size:14px; margin-bottom:8px;">✔ <strong>Import thành công!</strong></div>`;
+                setHTML('excel-file-status', `<div style="color:var(--success); font-size:14px; margin-bottom:8px;">✔ <strong>Import thành công!</strong></div>`);
                 alert(`☁️ Đã Import & Đồng bộ lên Cloud!\n\nTháng: ${currentMonth}/${currentYear}\nTổng: ${totalValues} giá trị.`);
-                closeImportModal(); document.getElementById('excel-file-input').value = '';
+                closeImportModal(); setVal('excel-file-input', '');
 
-            } catch(err) { console.error(err); status.innerHTML = `<span style="color:var(--danger)">❌ ${err.message}</span>`; alert('Lỗi: ' + err.message); }
+            } catch(err) { console.error(err); setHTML('excel-file-status', `<span style="color:var(--danger)">❌ ${err.message}</span>`); alert('Lỗi: ' + err.message); }
         }
 
         function processPastedData() {
-            let text = document.getElementById('paste-area').value.trim(); if(!text){alert("Chưa có dữ liệu!");return;}
+            let txtArea = el('paste-area'); if(!txtArea) return;
+            let text = txtArea.value.trim(); if(!text){alert("Chưa có dữ liệu!");return;}
             let lines = text.split(/\r?\n/), updatedCount = 0;
             lines.forEach(line => {
                 let cols = line.split(/\t/); if(cols.length < 2) return;
@@ -773,7 +811,7 @@
                     if(i < cols.length) { 
                         let v = toExcelNumber(cols[i]); 
                         if (v !== null) {
-                            if (!target[currentLevel].data[i - 1]) target[currentLevel].data[i - 1] = {value: "", note: ""}; // Vá mảng khuyết
+                            if (!target[currentLevel].data[i - 1]) target[currentLevel].data[i - 1] = {value: "", note: ""}; 
                             target[currentLevel].data[i - 1].value = v; 
                         }
                     } 
@@ -805,7 +843,8 @@
         }
 
         function drawSVGChart(dataArr, mean, sd, evals) {
-            const cont = document.getElementById('svg-chart-container'); const w = cont.clientWidth || 800; const h = 350; const pad = { top: 20, right: 30, bottom: 40, left: 60 };
+            const cont = el('svg-chart-container'); if(!cont) return;
+            const w = cont.clientWidth || 800; const h = 350; const pad = { top: 20, right: 30, bottom: 40, left: 60 };
             const gW = w - pad.left - pad.right; const gH = h - pad.top - pad.bottom; const sSD = sd === 0 ? 1 : sd; const yM = mean + (4 * sSD); const ym = mean - (4 * sSD);
             const valY = (val) => pad.top + gH - ((val - ym) / (yM - ym) * gH); const dayX = (idx) => pad.left + (idx * (gW / 30));
             let svg = `<svg class="lj-chart" viewBox="0 0 ${w} ${h}">`;
@@ -833,33 +872,50 @@
             cont.innerHTML = svg + `</svg>`;
         }
 
+        const tooltip = el('tooltip');
+        function showTooltip(evt, txt) { if(!tooltip) return; tooltip.innerHTML=txt; tooltip.style.display="block"; tooltip.style.left=(evt.pageX+15)+'px'; tooltip.style.top=(evt.pageY-25)+'px'; }
+        function hideTooltip() { if(tooltip) tooltip.style.display="none"; }
+
         function applySettingsToUI() {
-            let s = appData.settings; document.getElementById('ui-hospital-name').innerText = s.hospital; document.getElementById('ui-user-name').innerText = s.head; document.getElementById('ui-dept-name').innerText = s.dept;
-            document.getElementById('print-hospital').innerText = s.hospital; document.getElementById('print-dept').innerText = s.dept; document.getElementById('print-head-signature').innerText = s.head;
-            document.getElementById('set-hospital').value = s.hospital; document.getElementById('set-dept').value = s.dept; document.getElementById('set-head').value = s.head;
-            document.getElementById('rule-12s').checked = s.rules.r12s; document.getElementById('rule-13s').checked = s.rules.r13s; document.getElementById('rule-22s').checked = s.rules.r22s;
-            document.getElementById('rule-r4s').checked = s.rules.rr4s; document.getElementById('rule-41s').checked = s.rules.r41s; document.getElementById('rule-10x').checked = s.rules.r10x;
+            let s = appData.settings; 
+            setText('ui-hospital-name', s.hospital); setText('ui-user-name', s.head); setText('ui-dept-name', s.dept);
+            setText('print-hospital', s.hospital); setText('print-dept', s.dept); setText('print-head-signature', s.head);
+            setVal('set-hospital', s.hospital); setVal('set-dept', s.dept); setVal('set-head', s.head);
+            setCheck('rule-12s', s.rules.r12s); setCheck('rule-13s', s.rules.r13s); setCheck('rule-22s', s.rules.r22s);
+            setCheck('rule-r4s', s.rules.rr4s); setCheck('rule-41s', s.rules.r41s); setCheck('rule-10x', s.rules.r10x);
         }
 
         function saveSettings() {
-            appData.settings.hospital = document.getElementById('set-hospital').value; appData.settings.dept = document.getElementById('set-dept').value; appData.settings.head = document.getElementById('set-head').value;
-            appData.settings.rules = { r12s: document.getElementById('rule-12s').checked, r13s: document.getElementById('rule-13s').checked, r22s: document.getElementById('rule-22s').checked, rr4s: document.getElementById('rule-r4s').checked, r41s: document.getElementById('rule-41s').checked, r10x: document.getElementById('rule-10x').checked };
+            appData.settings.hospital = el('set-hospital') ? el('set-hospital').value : ""; 
+            appData.settings.dept = el('set-dept') ? el('set-dept').value : ""; 
+            appData.settings.head = el('set-head') ? el('set-head').value : "";
+            appData.settings.rules = { 
+                r12s: el('rule-12s') ? el('rule-12s').checked : true, 
+                r13s: el('rule-13s') ? el('rule-13s').checked : true, 
+                r22s: el('rule-22s') ? el('rule-22s').checked : true, 
+                rr4s: el('rule-r4s') ? el('rule-r4s').checked : true, 
+                r41s: el('rule-41s') ? el('rule-41s').checked : true, 
+                r10x: el('rule-10x') ? el('rule-10x').checked : true 
+            };
             database.ref(GLOBAL_SETTINGS_KEY).set({ settings: appData.settings, biochem_config: appData.biochem_config, hematology_config: appData.hematology_config }).then(() => { applySettingsToUI(); alert("☁️ Đã lưu Cài đặt Bệnh viện lên Cloud!"); });
         }
 
         function updateDashboard() {
-            document.getElementById('dash-bio-count').innerText = Object.keys(appData.biochem).length + " Test"; document.getElementById('dash-hem-count').innerText = Object.keys(appData.hematology).length + " Test";
-            let vCnt = 0; let logB = document.getElementById('violation-log-body'); logB.innerHTML = '';
+            let htmlLog = '';
+            setText('dash-bio-count', Object.keys(appData.biochem).length + " Test"); 
+            setText('dash-hem-count', Object.keys(appData.hematology).length + " Test");
+            let vCnt = 0; 
             ['biochem', 'hematology'].forEach(cat => {
                 let catN = cat==='biochem'?'Sinh hóa':'Huyết học';
                 Object.keys(appData[cat]).forEach(tn => {
                     ['level1','level2'].forEach(lvl => {
                         let tO = appData[cat][tn][lvl]; let ev = evaluateWestgard(tO.data, tO.mean, tO.sd);
-                        ev.forEach((err, idx) => { if(err && !err.isWarn) { vCnt++; logB.innerHTML += `<tr><td>${idx+1}/${currentMonth}/${currentYear}</td><td>${catN}</td><td><b>${tn}</b></td><td>${lvl==='level1'?'Control N':'Control P'}</td><td><span class="badge bg-danger">${err.rules}</span></td></tr>`; } });
+                        ev.forEach((err, idx) => { if(err && !err.isWarn) { vCnt++; htmlLog += `<tr><td>${idx+1}/${currentMonth}/${currentYear}</td><td>${catN}</td><td><b>${tn}</b></td><td>${lvl==='level1'?'Control N':'Control P'}</td><td><span class="badge bg-danger">${err.rules}</span></td></tr>`; } });
                     });
                 });
             });
-            document.getElementById('dash-violations').innerText = vCnt;
+            setHTML('violation-log-body', htmlLog);
+            setText('dash-violations', vCnt);
         }
 
         async function exportDataJSON() {
@@ -872,7 +928,7 @@
             } catch (e) { alert("Lỗi tải bản sao lưu từ đám mây: " + e.message); }
         }
 
-        window.onload = () => { initDB(); switchView('dashboard'); window.addEventListener('resize', () => { if(!document.getElementById('view-qc-entry').classList.contains('hidden')) updateChartAndStats(); }); };
+        window.onload = () => { initDB(); switchView('dashboard'); window.addEventListener('resize', () => { let v = el('view-qc-entry'); if(v && !v.classList.contains('hidden')) updateChartAndStats(); }); };
     </script>
 </body>
 </html>
