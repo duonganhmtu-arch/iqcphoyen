@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ thống Quản lý IQC LIS - Bệnh viện Phổ Yên (Cloud Version)</title>
+    <title>Hệ thống Quản lý IQC LIS - Bệnh viện Phổ Yên (Cloud)</title>
     <style>
         /* ================= CƠ SỞ MÀU SẮC & MATERIAL DESIGN ================= */
         :root {
@@ -313,6 +313,8 @@
                         <button class="btn btn-success" onclick="saveConfig()">☁️ Lưu Cấu Hình</button>
                     </div>
                 </div>
+            </div>
+
             <!-- CÀI ĐẶT HỆ THỐNG -->
             <div id="view-settings" class="view-section hidden">
                 <div class="card" style="max-width: 600px;">
@@ -384,12 +386,12 @@
     
     <script>
         // =========================================================================
-        // MÃ CẤU HÌNH ĐÃ ĐƯỢC BỔ SUNG DATABASE URL BẮT BUỘC
+        // MÃ CẤU HÌNH ĐÃ ĐƯỢC CHUẨN HÓA
         // =========================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyBw4T3CqG0_-Jnpvjwv5ZNYQhfJLh163yM",
             authDomain: "iqcphoyen.firebaseapp.com",
-            databaseURL: "https://iqcphoyen-default-rtdb.asia-southeast1.firebasedatabase.app/", // Nếu gặp lỗi trắng trang, hãy thử đổi đuôi thành .firebaseio.com
+            databaseURL: "https://iqcphoyen-default-rtdb.asia-southeast1.firebasedatabase.app/",
             projectId: "iqcphoyen",
             storageBucket: "iqcphoyen.firebasestorage.app",
             messagingSenderId: "813937126796",
@@ -446,7 +448,6 @@
                     appData.biochem_config = gData.biochem_config || {};
                     appData.hematology_config = gData.hematology_config || {};
                 } else {
-                    // Khởi tạo lần đầu
                     appData.settings = { hospital: "BỆNH VIỆN PHỔ YÊN", dept: "Khoa Xét nghiệm", head: "Hà Thị Son", rules: { r12s: true, r13s: true, r22s: true, rr4s: true, r41s: true, r10x: true } };
                     appData.biochem_config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
                     appData.hematology_config = { "WBC": { level1: { mean: 5.0, sd: 0.5 }, level2: { mean: 15.0, sd: 1.5 } } };
@@ -466,7 +467,6 @@
                     Object.keys(appData.biochem_config).forEach(k => {
                         appData.biochem[k] = createTestObj(appData.biochem_config[k].level1.mean, appData.biochem_config[k].level1.sd, [], appData.biochem_config[k].level2.mean, appData.biochem_config[k].level2.sd, []);
                     });
-                    // Tự động lưu form rỗng lên cloud
                     await database.ref(monthKey).set({ biochem: appData.biochem, hematology: appData.hematology });
                 }
                 
@@ -477,8 +477,8 @@
 
             } catch (error) {
                 console.error("Lỗi Firebase:", error);
-                document.getElementById('page-main-title').innerText = "❌ Lỗi kết nối Cloud. Hãy kiểm tra lại Database URL.";
-                alert("Lỗi tải dữ liệu đám mây: Bạn chưa cấu hình quyền truy cập (Rules) hoặc kết nối bị từ chối.");
+                document.getElementById('page-main-title').innerText = "❌ Lỗi kết nối Cloud. Vui lòng tải lại trang (F5).";
+                alert("Lỗi tải dữ liệu đám mây: " + error.message);
             }
         }
 
@@ -609,7 +609,6 @@
             saveData(false); updateChartAndStats(); 
         }
 
-        // ĐẨY DỮ LIỆU LÊN FIREBASE REALTIME DB
         function saveData(showAlert = true) { 
             let monthKey = `IQC_DATA_${currentMonth}_${currentYear}_V6`;
             database.ref(monthKey).set({ biochem: appData.biochem, hematology: appData.hematology })
@@ -617,9 +616,7 @@
                 updateDashboard();
                 if(showAlert) alert(`☁️ Đã lưu dữ liệu Tháng ${currentMonth}/${currentYear} lên Cloud thành công!`);
             })
-            .catch((error) => {
-                alert("❌ Lỗi khi lưu lên Cloud: " + error.message);
-            });
+            .catch((error) => { alert("❌ Lỗi khi lưu lên Cloud: " + error.message); });
         }
 
         function exportDataExcel() {
@@ -677,7 +674,6 @@
             if (sm) sm.value = mm;
             if (sy) { if(![...sy.options].some(o => o.value === yy)) { const op = document.createElement('option'); op.value = yy; op.textContent = yy; sy.appendChild(op); } sy.value = yy; }
             
-            // Re-fetch from Firebase for the new month
             let monthKey = `IQC_DATA_${currentMonth}_${currentYear}_V6`;
             let snapData = await database.ref(monthKey).once('value');
             let mData = snapData.val();
@@ -739,7 +735,7 @@
                 });
 
                 if (!bestDate) throw new Error('Không tìm thấy cột Ngày.');
-                await setImportedMonthYear(bestDate); // Đợi lấy data cloud tháng mới
+                await setImportedMonthYear(bestDate);
 
                 const result = { sheets: [], tests: new Set(), valuesN: 0, valuesP: 0 };
                 wb.SheetNames.forEach((name, idx) => { importSheetMatrix(allRows[name], name, idx, result); });
