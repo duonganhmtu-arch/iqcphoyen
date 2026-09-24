@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ thống Quản lý IQC LIS - Bệnh viện Phổ Yên (Cloud)</title>
+    <title>Hệ thống Quản lý IQC LIS - Bệnh viện Phổ Yên (Cloud) - V3</title>
     <style>
         /* ================= CƠ SỞ MÀU SẮC & MATERIAL DESIGN ================= */
         :root {
@@ -297,7 +297,7 @@
                 </div>
 
                 <div class="card">
-                    <p style="font-size: 13px; color: var(--danger); margin-bottom: 12px; font-weight:bold;">Lưu ý: Thông số cài đặt ở đây sẽ được đồng bộ lên Cloud và áp dụng cho tất cả các tháng. Bấm "Lưu Cấu Hình" để ghi nhận!</p>
+                    <p style="font-size: 13px; color: var(--danger); margin-bottom: 12px; font-weight:bold;">Lưu ý: Cấu hình Mean/SD được <strong>đóng băng theo từng tháng</strong>. Khi chuyển sang tháng mới, hệ thống tự sao chép cấu hình tháng trước; chỉnh sửa tháng này sẽ <strong>không làm thay đổi các tháng đã khóa</strong>.</p>
                     <table style="font-size: 13px;">
                         <thead>
                             <tr>
@@ -441,6 +441,159 @@
             return { level1: { mean: m1, sd: sd1, data: d1 }, level2: { mean: m2, sd: sd2, data: d2 } };
         }
 
+        /* ================= QUẢN LÝ CẤU HÌNH THEO THÁNG =================
+           V6 -> V7: Mean/SD không còn là cấu hình dùng chung cho mọi tháng.
+           Mỗi node IQC_DATA_MM_YYYY_V6 có thêm:
+               config: { biochem: {...}, hematology: {...} }
+           Cấu hình của tháng được đóng băng; cấu hình Global chỉ còn là mẫu dự phòng.
+        */
+        function monthKey(mm, yy) { return `IQC_DATA_${mm}_${yy}_V6`; }
+        function cloneJSON(obj) { return JSON.parse(JSON.stringify(obj || {})); }
+
+        function configFromMonthData(mData) {
+            const out = { biochem: {}, hematology: {} };
+            ['biochem', 'hematology'].forEach(cat => {
+                const src = (mData && mData[cat]) || {};
+                Object.keys(src).forEach(test => {
+                    const t = src[test] || {};
+                    if (t.level1 || t.level2) {
+                        out[cat][test] = {
+                            level1: { mean: Number(t.level1?.mean ?? 0), sd: Number(t.level1?.sd ?? 1) },
+                            level2: { mean: Number(t.level2?.mean ?? 0), sd: Number(t.level2?.sd ?? 1) }
+                        };
+                    }
+                });
+            });
+            return out;
+        }
+
+        function mergeConfigFallback(monthConfig, fallbackConfig) {
+            const result = cloneJSON(monthConfig);
+            ['biochem', 'hematology'].forEach(cat => {
+                result[cat] = result[cat] || {};
+                Object.keys(fallbackConfig?.[cat] || {}).forEach(test => {
+                    if (!result[cat][test]) result[cat][test] = cloneJSON(fallbackConfig[cat][test]);
+                });
+            });
+            return result;
+        }
+
+        async function migrateLegacyMonthlyConfig() {
+            // Migration chỉ chạy cho các tháng chưa có node config.
+            // Nếu dữ liệu cũ đã có Mean/SD trong chính tháng đó, ưu tiên lấy Mean/SD từ dữ liệu tháng.
+            const snap = await database.ref().once('value');
+            const root = snap.val() || {};
+            const fallback = {
+                biochem: cloneJSON(appData.biochem_config || {}),
+                hematology: cloneJSON(appData.hematology_config || {})
+            };
+            const writes = {};
+            let migrated = 0;
+            Object.keys(root).forEach(key => {
+                if (!/^IQC_DATA_\d{2}_\d{4}_V6$/.test(key)) return;
+                const node = root[key] || {};
+                if (node.config && node.config.biochem && node.config.hematology) return;
+                const fromData = configFromMonthData(node);
+                const cfg = mergeConfigFallback(fromData, fallback);
+                writes[`${key}/config`] = cfg;
+                migrated++;
+            });
+            if (Object.keys(writes).length) await database.ref().update(writes);
+            return migrated;
+        }
+
+        async function getPreviousMonthConfig(mm, yy) {
+            let d = new Date(Number(yy), Number(mm) - 1, 1);
+            for (let i = 0; i < 120; i++) {
+                d.setMonth(d.getMonth() - 1);
+                const pm = String(d.getMonth() + 1).padStart(2, '0');
+                const py = String(d.getFullYear());
+                const snap = await database.ref(monthKey(pm, py) + '/config').once('value');
+                const cfg = snap.val();
+                if (cfg && (cfg.biochem || cfg.hematology)) return cfg;
+            }
+            return {
+                biochem: cloneJSON(appData.biochem_config || {}),
+                hematology: cloneJSON(appData.hematology_config || {})
+            };
+        }
+
+        function applyMonthConfigToData() {
+            ['biochem', 'hematology'].forEach(cat => {
+                const conf = appData.monthConfig?.[cat] || {};
+                Object.keys(conf).forEach(test => {
+                    const c = conf[test];
+                    if (!c) return;
+                    if (!appData[cat][test]) {
+                        appData[cat][test] = createTestObj(
+                            c.level1?.mean ?? 0, c.level1?.sd ?? 1, [],
+                            c.level2?.mean ?? 0, c.level2?.sd ?? 1, []
+                        );
+                    } else {
+                        appData[cat][test].level1.mean = Number(c.level1?.mean ?? 0);
+                        appData[cat][test].level1.sd = Number(c.level1?.sd ?? 1);
+                        appData[cat][test].level2.mean = Number(c.level2?.mean ?? 0);
+                        appData[cat][test].level2.sd = Number(c.level2?.sd ?? 1);
+                    }
+                });
+            });
+        }
+
+        async function loadMonthData(mm = currentMonth, yy = currentYear, createIfMissing = true) {
+            const key = monthKey(mm, yy);
+            const snap = await database.ref(key).once('value');
+            let mData = snap.val();
+            const isNew = !mData;
+            if (!mData) mData = {};
+
+            // QUAN TRỌNG: luôn thay toàn bộ bộ nhớ hiện tại bằng đúng dữ liệu của tháng đang chọn.
+            // Không giữ lại test/QC của tháng trước. Đây là điểm then chốt để tháng 08 không bị
+            // ảnh hưởng khi chuyển sang tháng 09 hoặc các tháng khác.
+            appData.biochem = cloneJSON(mData.biochem || {});
+            appData.hematology = cloneJSON(mData.hematology || {});
+
+            const hasStoredConfig = !!(mData.config && (mData.config.biochem || mData.config.hematology));
+
+            if (hasStoredConfig) {
+                // Config đã lưu trong node tháng là nguồn sự thật duy nhất của tháng đó.
+                appData.monthConfig = {
+                    biochem: cloneJSON(mData.config.biochem || {}),
+                    hematology: cloneJSON(mData.config.hematology || {})
+                };
+            } else if (!isNew) {
+                // THÁNG CŨ chưa có trường config: tuyệt đối không lấy config tháng trước/global
+                // để ghi đè Mean/SD. Khôi phục Mean/SD từ chính dữ liệu QC đang có của tháng.
+                appData.monthConfig = configFromMonthData(mData);
+
+                // Chỉ bổ sung cấu hình global cho những test chưa tồn tại trong dữ liệu tháng.
+                appData.monthConfig = mergeConfigFallback(
+                    appData.monthConfig,
+                    { biochem: appData.biochem_config || {}, hematology: appData.hematology_config || {} }
+                );
+            } else {
+                // THÁNG MỚI: sao chép cấu hình tháng gần nhất có thật trên Cloud.
+                // Chỉ sao chép Mean/SD, KHÔNG sao chép dữ liệu QC.
+                appData.monthConfig = await getPreviousMonthConfig(mm, yy);
+                appData.biochem = {};
+                appData.hematology = {};
+            }
+
+            // Chỉ đồng bộ Mean/SD của CHÍNH tháng hiện tại vào object đang hiển thị.
+            applyMonthConfigToData();
+
+            if (createIfMissing && isNew) {
+                await database.ref(key).set({
+                    config: cloneJSON(appData.monthConfig),
+                    biochem: appData.biochem,
+                    hematology: appData.hematology
+                });
+            } else if (createIfMissing && !hasStoredConfig) {
+                // Với tháng cũ chưa có config, chỉ tạo thêm /config; không thay dữ liệu QC.
+                await database.ref(key + '/config').set(cloneJSON(appData.monthConfig));
+            }
+            return { data: mData, isNew, hasStoredConfig };
+        }
+
         async function initDB() {
             setText('page-main-title', "☁️ Đang đồng bộ dữ liệu từ Cloud...");
             let selM = el('sel-month'); let selY = el('sel-year');
@@ -455,7 +608,7 @@
                     appData.hematology_config = gData.hematology_config || {};
                     if(appData.biochem_config["A.U"]) {
                         appData.biochem_config["AU"] = appData.biochem_config["A.U"]; delete appData.biochem_config["A.U"];
-                        database.ref(GLOBAL_SETTINGS_KEY).set({ settings: appData.settings, biochem_config: appData.biochem_config, hematology_config: appData.hematology_config });
+                        await database.ref(GLOBAL_SETTINGS_KEY).set({ settings: appData.settings, biochem_config: appData.biochem_config, hematology_config: appData.hematology_config });
                     }
                 } else {
                     appData.settings = { hospital: "BỆNH VIỆN PHỔ YÊN", dept: "Khoa Xét nghiệm", head: "Hà Thị Son", rules: { r12s: true, r13s: true, r22s: true, rr4s: true, r41s: true, r10x: true } };
@@ -464,32 +617,19 @@
                     await database.ref(GLOBAL_SETTINGS_KEY).set({ settings: appData.settings, biochem_config: appData.biochem_config, hematology_config: appData.hematology_config });
                 }
 
-                let monthKey = `IQC_DATA_${currentMonth}_${currentYear}_V6`;
-                let snapData = await database.ref(monthKey).once('value');
-                let mData = snapData.val();
+                // Migration tự động cho toàn bộ tháng cũ.
+                await migrateLegacyMonthlyConfig();
+                await loadMonthData(currentMonth, currentYear, true);
 
-                if (mData) {
-                    appData.biochem = mData.biochem || {}; appData.hematology = mData.hematology || {};
-                    if(appData.biochem["A.U"]) {
-                        appData.biochem["AU"] = appData.biochem["A.U"]; delete appData.biochem["A.U"];
-                        database.ref(monthKey).set({ biochem: appData.biochem, hematology: appData.hematology });
-                    }
-                    syncConfigToData();
-                } else {
-                    appData.biochem = {}; appData.hematology = {};
-                    Object.keys(appData.biochem_config).forEach(k => {
-                        appData.biochem[k] = createTestObj(appData.biochem_config[k].level1.mean, appData.biochem_config[k].level1.sd, [], appData.biochem_config[k].level2.mean, appData.biochem_config[k].level2.sd, []);
-                    });
-                    await database.ref(monthKey).set({ biochem: appData.biochem, hematology: appData.hematology });
-                }
-                
                 updateTimeUI(); applySettingsToUI();
                 let activeViewEl = document.querySelector('.view-section:not(.hidden)');
                 if(activeViewEl) {
                     let view = activeViewEl.id;
                     if(view === 'view-dashboard') updateDashboard();
                     if(view === 'view-qc-entry') { buildTestSelector(); loadTestData(); }
+                    if(view === 'view-config') renderConfig();
                 }
+                setText('page-main-title', `${activeCategory === 'biochem' ? "Sinh Hóa" : "Huyết Học"} - Tháng ${currentMonth}/${currentYear}`);
 
             } catch (error) {
                 console.error("Lỗi Firebase:", error);
@@ -498,21 +638,21 @@
             }
         }
 
-        function syncConfigToData() {
-            ['biochem', 'hematology'].forEach(cat => {
-                let conf = appData[cat + '_config'];
-                Object.keys(conf).forEach(k => {
-                    if (!appData[cat][k]) {
-                        appData[cat][k] = createTestObj(conf[k].level1.mean, conf[k].level1.sd, [], conf[k].level2.mean, conf[k].level2.sd, []);
-                    } else {
-                        appData[cat][k].level1.mean = conf[k].level1.mean; appData[cat][k].level1.sd = conf[k].level1.sd;
-                        appData[cat][k].level2.mean = conf[k].level2.mean; appData[cat][k].level2.sd = conf[k].level2.sd;
-                    }
-                });
-            });
-        }
+        // Giữ tên hàm cũ để tương thích, nhưng KHÔNG còn ghi đè cấu hình tháng khác.
+        function syncConfigToData() { applyMonthConfigToData(); }
 
-        function changeTime() { initDB(); }
+        async function changeTime() {
+            let selM = el('sel-month'); let selY = el('sel-year');
+            currentMonth = selM ? selM.value : currentMonth;
+            currentYear = selY ? selY.value : currentYear;
+            try {
+                await loadMonthData(currentMonth, currentYear, true);
+                updateTimeUI();
+                if(document.getElementById('view-dashboard') && !document.getElementById('view-dashboard').classList.contains('hidden')) updateDashboard();
+                if(document.getElementById('view-qc-entry') && !document.getElementById('view-qc-entry').classList.contains('hidden')) { buildTestSelector(); loadTestData(); }
+                if(document.getElementById('view-config') && !document.getElementById('view-config').classList.contains('hidden')) renderConfig();
+            } catch(e) { alert('Không thể tải tháng ' + currentMonth + '/' + currentYear + ': ' + e.message); }
+        }
 
         function updateTimeUI() {
             let mStr = `Tháng: ${currentMonth}/${currentYear}`;
@@ -539,8 +679,9 @@
             let tbody = el('config-tbody'); 
             if(!tbody) return;
             tbody.innerHTML = '';
+            const monthConfig = appData.monthConfig || { biochem: {}, hematology: {} };
             ['biochem', 'hematology'].forEach(cat => {
-                let catName = cat === 'biochem' ? 'Sinh hóa' : 'Huyết học'; let conf = appData[cat + '_config'];
+                let catName = cat === 'biochem' ? 'Sinh hóa' : 'Huyết học'; let conf = monthConfig[cat] || {};
                 Object.keys(conf).forEach(k => {
                     let t = conf[k];
                     tbody.innerHTML += `<tr>
@@ -555,20 +696,60 @@
                 });
             });
         }
-        function updateCfg(cat, test, lvl, field, val) { appData[cat + '_config'][test][lvl][field] = parseFloat(val); }
+
+        async function updateCfg(cat, test, lvl, field, val) {
+            if(!appData.monthConfig) appData.monthConfig = { biochem:{}, hematology:{} };
+            if(!appData.monthConfig[cat]) appData.monthConfig[cat] = {};
+            if(!appData.monthConfig[cat][test]) appData.monthConfig[cat][test] = { level1:{mean:0,sd:1}, level2:{mean:0,sd:1} };
+            const n = parseFloat(val);
+            if(!Number.isFinite(n)) return;
+            appData.monthConfig[cat][test][lvl][field] = n;
+            applyMonthConfigToData();
+            // Lưu ngay cấu hình vào node của THÁNG HIỆN TẠI để tránh mất thay đổi khi chuyển tháng.
+            try {
+                await database.ref(monthKey(currentMonth,currentYear) + '/config').set(cloneJSON(appData.monthConfig));
+                renderConfig();
+                loadTestData();
+                updateDashboard();
+            } catch(e) {
+                alert('❌ Lỗi lưu cấu hình tháng ' + currentMonth + '/' + currentYear + ': ' + e.message);
+            }
+        }
+
         function addNewTest() {
             let catEl = el('new-test-category'); let nameEl = el('new-test-name');
             if(!catEl || !nameEl) return;
             let cat = catEl.value; let name = nameEl.value.trim().toUpperCase();
-            if(!name) return alert("Vui lòng nhập tên Xét nghiệm"); if(appData[cat + '_config'][name]) return alert("Xét nghiệm này đã tồn tại!");
-            appData[cat + '_config'][name] = { level1: { mean: 10, sd: 1 }, level2: { mean: 20, sd: 2 } }; nameEl.value = ''; renderConfig();
+            if(!name) return alert("Vui lòng nhập tên Xét nghiệm");
+            if(appData.monthConfig?.[cat]?.[name]) return alert("Xét nghiệm này đã tồn tại trong tháng hiện tại!");
+            if(!appData.monthConfig) appData.monthConfig = { biochem:{}, hematology:{} };
+            appData.monthConfig[cat][name] = { level1: { mean: 10, sd: 1 }, level2: { mean: 20, sd: 2 } };
+            appData[cat][name] = createTestObj(10,1,[],20,2,[]);
+            nameEl.value = ''; renderConfig();
         }
-        function deleteTest(cat, test) {
-            if(confirm(`Bạn có chắc muốn xóa Xét nghiệm ${test}? Mọi dữ liệu các tháng sẽ bị mất khi lưu.`)){ delete appData[cat + '_config'][test]; delete appData[cat][test]; renderConfig(); }
+
+        async function deleteTest(cat, test) {
+            if(!confirm(`Bạn có chắc muốn xóa Xét nghiệm ${test} khỏi tháng ${currentMonth}/${currentYear}? Dữ liệu QC của tháng này sẽ bị xóa.`)) return;
+            delete appData.monthConfig[cat][test];
+            delete appData[cat][test];
+            try {
+                await database.ref(monthKey(currentMonth,currentYear)).set({ config: appData.monthConfig, biochem: appData.biochem, hematology: appData.hematology });
+                renderConfig(); buildTestSelector();
+                alert(`☁️ Đã xóa ${test} khỏi tháng ${currentMonth}/${currentYear}. Các tháng khác không bị ảnh hưởng.`);
+            } catch(e) { alert('Lỗi khi xóa xét nghiệm: ' + e.message); }
         }
-        function saveConfig() { 
-            database.ref(GLOBAL_SETTINGS_KEY).set({ settings: appData.settings, biochem_config: appData.biochem_config, hematology_config: appData.hematology_config })
-            .then(() => { syncConfigToData(); saveData(false); alert("☁️ Đã đồng bộ Cấu hình lên Cloud!"); });
+
+        async function saveConfig() {
+            try {
+                applyMonthConfigToData();
+                await database.ref(monthKey(currentMonth,currentYear)).set({
+                    config: cloneJSON(appData.monthConfig),
+                    biochem: appData.biochem,
+                    hematology: appData.hematology
+                });
+                renderConfig(); buildTestSelector(); loadTestData(); updateDashboard();
+                alert(`☁️ Đã lưu cấu hình riêng của tháng ${currentMonth}/${currentYear}. Các tháng khác được giữ nguyên.`);
+            } catch(e) { alert('❌ Lỗi lưu cấu hình: ' + e.message); }
         }
 
         function buildTestSelector() {
@@ -647,14 +828,18 @@
             saveData(false); updateChartAndStats(); 
         }
 
-        function saveData(showAlert = true) { 
-            let monthKey = `IQC_DATA_${currentMonth}_${currentYear}_V6`;
-            database.ref(monthKey).set({ biochem: appData.biochem, hematology: appData.hematology })
-            .then(() => {
+        async function saveData(showAlert = true) {
+            const key = monthKey(currentMonth, currentYear);
+            try {
+                // Luôn ghi cả config của tháng cùng dữ liệu QC để Mean/SD được đóng băng.
+                await database.ref(key).update({
+                    config: cloneJSON(appData.monthConfig || { biochem: {}, hematology: {} }),
+                    biochem: appData.biochem,
+                    hematology: appData.hematology
+                });
                 updateDashboard();
-                if(showAlert) alert(`☁️ Đã lưu dữ liệu Tháng ${currentMonth}/${currentYear} lên Cloud thành công!`);
-            })
-            .catch((error) => { alert("❌ Lỗi khi lưu lên Cloud: " + error.message); });
+                if(showAlert) alert(`☁️ Đã lưu dữ liệu + cấu hình riêng Tháng ${currentMonth}/${currentYear} lên Cloud thành công!`);
+            } catch(error) { alert("❌ Lỗi khi lưu lên Cloud: " + error.message); }
         }
 
         function exportDataExcel() {
@@ -703,28 +888,28 @@
         function findHeaderRow(rows) { for(let i = 0; i < Math.min(rows.length, 10); i++) { const h = (rows[i] || []).map(normalizeExcelHeader); if(h.some(isDateHeader)) return i; } return -1; }
         
         function ensureImportedTest(cat, testName) {
-            let conf = appData[cat + '_config']; let existing = conf[testName];
-            if (!existing) { conf[testName] = { level1: { mean: 0, sd: 1 }, level2: { mean: 0, sd: 1 } }; existing = conf[testName]; }
-            if (!appData[cat][testName]) { appData[cat][testName] = createTestObj(existing.level1.mean, existing.level1.sd, [], existing.level2.mean, existing.level2.sd, []); }
+            if(!appData.monthConfig) appData.monthConfig = { biochem:{}, hematology:{} };
+            let conf = appData.monthConfig[cat] || (appData.monthConfig[cat] = {});
+            let existing = conf[testName];
+            if (!existing) {
+                conf[testName] = { level1: { mean: 0, sd: 1 }, level2: { mean: 0, sd: 1 } };
+                existing = conf[testName];
+            }
+            if (!appData[cat][testName]) {
+                appData[cat][testName] = createTestObj(existing.level1.mean, existing.level1.sd, [], existing.level2.mean, existing.level2.sd, []);
+            }
             return appData[cat][testName];
         }
 
         async function setImportedMonthYear(date) {
             if(!date || isNaN(date)) return;
             const mm = String(date.getMonth() + 1).padStart(2, '0'); const yy = String(date.getFullYear());
-            if (mm === currentMonth && yy === currentYear) return;
             currentMonth = mm; currentYear = yy;
-            
             const sm = el('sel-month'); const sy = el('sel-year');
             if (sm) sm.value = mm;
             if (sy) { if(![...sy.options].some(o => o.value === yy)) { const op = document.createElement('option'); op.value = yy; op.textContent = yy; sy.appendChild(op); } sy.value = yy; }
-            
-            let monthKey = `IQC_DATA_${currentMonth}_${currentYear}_V6`;
-            let snapData = await database.ref(monthKey).once('value');
-            let mData = snapData.val();
-            if (mData) { appData.biochem = mData.biochem || {}; appData.hematology = mData.hematology || {}; } 
-            else { appData.biochem = {}; appData.hematology = {}; }
-            syncConfigToData(); updateTimeUI();
+            await loadMonthData(currentMonth, currentYear, true);
+            updateTimeUI();
         }
 
         function importSheetMatrix(rows, sheetName, sheetIdx, result) {
@@ -758,44 +943,63 @@
         }
 
         async function handleExcelFile(file) {
-            if(!file) return; setHTML('excel-file-status', '<span style="color:var(--primary)">⏳ Đang đọc file Excel...</span>');
+            if(!file) return;
+            setHTML('excel-file-status', '<span style="color:var(--primary)">⏳ Đang đọc và tự phân loại dữ liệu theo từng tháng...</span>');
             try {
                 if(!window.XLSX) throw new Error('Thư viện Excel chưa tải.');
-                const buffer = await file.arrayBuffer(); const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
-                let allRows = {}; let monthCounts = {}; let bestDate = null; let maxCount = 0;
+                const buffer = await file.arrayBuffer();
+                const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+                let allRows = {};
+                const monthSet = new Map();
 
                 wb.SheetNames.forEach(name => {
                     const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null, raw: true });
-                    allRows[name] = rows; const hi = findHeaderRow(rows);
-                    if (hi >= 0) {
-                        const dateCol = (rows[hi] || []).findIndex(isDateHeader);
-                        if (dateCol >= 0) {
-                            for(let r = hi + 1; r < rows.length; r++) {
-                                let d = parseExcelDate(rows[r][dateCol]);
-                                if (d) { 
-                                    let key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); monthCounts[key] = (monthCounts[key] || 0) + 1;
-                                    if (monthCounts[key] > maxCount) { maxCount = monthCounts[key]; bestDate = d; }
-                                }
-                            }
-                        }
+                    allRows[name] = rows;
+                    const hi = findHeaderRow(rows);
+                    if (hi < 0) return;
+                    const dateCol = (rows[hi] || []).findIndex(isDateHeader);
+                    if (dateCol < 0) return;
+                    for(let r = hi + 1; r < rows.length; r++) {
+                        const d = parseExcelDate(rows[r][dateCol]);
+                        if(!d) continue;
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const yy = String(d.getFullYear());
+                        monthSet.set(`${yy}-${mm}`, new Date(d.getFullYear(), d.getMonth(), 1));
                     }
                 });
 
-                if (!bestDate) throw new Error('Không tìm thấy cột Ngày.');
-                await setImportedMonthYear(bestDate);
+                if(!monthSet.size) throw new Error('Không tìm thấy cột Ngày hoặc dữ liệu ngày hợp lệ trong file Excel.');
 
-                const result = { sheets: [], tests: new Set(), valuesN: 0, valuesP: 0 };
-                wb.SheetNames.forEach((name, idx) => { importSheetMatrix(allRows[name], name, idx, result); });
+                const months = [...monthSet.entries()].sort((a,b) => a[0].localeCompare(b[0]));
+                let totalValues = 0;
+                let monthReport = [];
 
-                let totalValues = result.valuesN + result.valuesP;
-                if (totalValues === 0) throw new Error('Không có dữ liệu số.');
+                for(const [, monthDate] of months) {
+                    await setImportedMonthYear(monthDate);
+                    const result = { sheets: [], tests: new Set(), valuesN: 0, valuesP: 0 };
+                    wb.SheetNames.forEach((name, idx) => { importSheetMatrix(allRows[name], name, idx, result); });
+                    const count = result.valuesN + result.valuesP;
+                    if(count > 0) {
+                        await saveData(false);
+                        totalValues += count;
+                        monthReport.push(`• ${currentMonth}/${currentYear}: ${count} giá trị`);
+                    }
+                }
 
-                saveData(false); buildTestSelector(); loadTestData(); renderConfig();
-                setHTML('excel-file-status', `<div style="color:var(--success); font-size:14px; margin-bottom:8px;">✔ <strong>Import thành công!</strong></div>`);
-                alert(`☁️ Đã Import & Đồng bộ lên Cloud!\n\nTháng: ${currentMonth}/${currentYear}\nTổng: ${totalValues} giá trị.`);
+                if(totalValues === 0) throw new Error('Không có dữ liệu số hợp lệ để import.');
+
+                // Trả giao diện về tháng cuối cùng được import.
+                await loadMonthData(currentMonth, currentYear, true);
+                buildTestSelector(); loadTestData(); renderConfig(); updateDashboard();
+                setHTML('excel-file-status', `<div style="color:var(--success); font-size:14px; margin-bottom:8px;">✔ <strong>Import thành công ${months.length} tháng.</strong></div>`);
+                alert(`☁️ Đã Import & Đồng bộ Cloud theo từng tháng!\n\n${monthReport.join('\n')}\n\nTổng: ${totalValues} giá trị.`);
                 closeImportModal(); setVal('excel-file-input', '');
 
-            } catch(err) { console.error(err); setHTML('excel-file-status', `<span style="color:var(--danger)">❌ ${err.message}</span>`); alert('Lỗi: ' + err.message); }
+            } catch(err) {
+                console.error(err);
+                setHTML('excel-file-status', `<span style="color:var(--danger)">❌ ${err.message}</span>`);
+                alert('Lỗi: ' + err.message);
+            }
         }
 
         function processPastedData() {
